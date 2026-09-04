@@ -1,10 +1,13 @@
-// api 层 · Clash API(REST / WebSocket)的纯请求函数。
+// api 层 · Clash 通道(REST / WebSocket)的纯请求函数。
 //
-// 本文件以 mihomo API 为分类基准,smart、honk、reFind 均视为兼容实现:
+// 本文件以 mihomo API 为分类基准,smart、sing-box、honk、reFind 均视为兼容实现:
 //   1. mihomo 标准 —— mihomo 提供的标准端点
 //   2. smart 附加   —— smart 相对 mihomo 增加的端点
-//   3. honk 附加    —— honk 相对 mihomo 增加的端点
-//   4. reFind 附加  —— reFind 相对 mihomo 增加的端点
+//   3. sing-box 专属 —— sing-box 的 Clash 兼容 API 提供的端点
+//   4. honk 附加    —— honk 相对 mihomo 增加的端点
+//   5. reFind 附加  —— reFind 相对 mihomo 增加的端点
+// honk 实现的是通用分区的子集(没有 /upgrade/ui),差异见能力表。
+// sing-box API(gRPC)是另一条通道,不在这里,见 api/singbox/。
 //
 // 兼容实现未覆盖的 mihomo 标准端点视为能力不足,由 assembly/backend.ts
 // 的能力表记录。本层只按来源归类请求,不做任何后端判断。
@@ -221,7 +224,8 @@ export const probeClashChannel = async (
   }
 }
 
-// 按索引批量切换规则启用状态;reFind 侧走 toggleRuleDisabledRefindAPI。
+// 按索引批量切换规则启用状态;sing-box 侧走 toggleRuleDisabledSingBoxAPI,
+// reFind 侧走 toggleRuleDisabledRefindAPI。
 export const toggleRuleDisabledAPI = (data: Record<number, boolean>) => {
   return axios.patch(`/rules/disable`, data)
 }
@@ -254,7 +258,8 @@ export const restartCoreAPI = () => {
   return axios.post('/restart')
 }
 
-// 面板自升级是 mihomo 标准能力;honk 虽可加载 zashboard,但未提供此端点。
+// 面板自升级是 mihomo 标准能力;sing-box 的 Clash 兼容 API 也提供,
+// honk 虽可加载 zashboard,但未提供此端点。
 export const upgradeUIAPI = () => {
   return axios.post('/upgrade/ui')
 }
@@ -307,5 +312,15 @@ export const fetchHonkStatsAPI = () => axios.get<HonkStats>('/stats')
 // reFind 的规则带稳定 uuid,按 uuid 切换启用状态;mihomo 走 PATCH /rules/disable。
 // 两者的选择由响应数据(rule.uuid 是否存在)决定,见 assembly/rules。
 export const toggleRuleDisabledRefindAPI = (uuid: string) => {
+  return axios.put(`/rules/${encodeURIComponent(uuid)}`)
+}
+
+// ==========================================================================
+// sing-box 的 Clash 兼容 API 专属
+// ==========================================================================
+
+// sing-box 的规则带稳定 uuid,按 uuid 切换启用状态;mihomo 走 PATCH /rules/disable。
+// 两者的选择由响应数据(rule.uuid 是否存在)决定,见 assembly/rules。
+export const toggleRuleDisabledSingBoxAPI = (uuid: string) => {
   return axios.put(`/rules/${encodeURIComponent(uuid)}`)
 }

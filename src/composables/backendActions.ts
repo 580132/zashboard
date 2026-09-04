@@ -106,7 +106,7 @@ const runOnce = async (
 
 /** 当前后端/内核下真正能执行的动作,顺序即两处入口的展示顺序 */
 export const backendActions = computed<BackendAction[]>(() => {
-  if (!activeBackend.value) return []
+  if (!can('coreActions')) return []
 
   const actions: BackendAction[] = []
 

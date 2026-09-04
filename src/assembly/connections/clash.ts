@@ -139,6 +139,10 @@ export const connectionAccessor: ConnectionAccessor = {
   },
   sniffHost: (connection) => asClash(connection).metadata.sniffHost,
   remoteAddress: (connection) => asClash(connection).metadata.remoteDestination,
+  // clash 不提供 sing-box 原生字段。
+  protocol: () => '',
+  outboundType: () => '',
+  fromOutbound: () => '',
   isDirect: (connection) => getFinalProxyType(asClash(connection)) === PROXY_TYPE.Direct,
   smartBlock: (connection) => asClash(connection).metadata.smartBlock,
 }
