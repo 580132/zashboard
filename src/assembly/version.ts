@@ -212,11 +212,15 @@ async function fetchWithLocalCache<T>(url: string, version: string): Promise<T> 
 
 export const fetchIsUIUpdateAvailable = async () => {
   const { tag_name } = await fetchWithLocalCache<{ tag_name: string }>(
-    'https://api.github.com/repos/Zephyruso/zashboard/releases/latest',
+    'https://api.github.com/repos/580132/zashboard/releases/latest',
     zashboardVersion.value,
   )
 
-  return Boolean(tag_name && tag_name !== `v${zashboardVersion.value}`)
+  // Fork tags carry a -singbox.N suffix (e.g. v3.25.0-singbox.1);
+  // compare against the base version only.
+  const baseTag = tag_name?.replace(/-singbox.*$/, '')
+
+  return Boolean(baseTag && baseTag !== `v${zashboardVersion.value}`)
 }
 
 const check = async (url: string, versionNumber: string) => {
