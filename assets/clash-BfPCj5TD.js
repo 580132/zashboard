@@ -1,0 +1,1 @@
+import{E as e,J as t,Y as n}from"./index-DyCeDAjn.js";var r=async()=>{e.value=(await t()).data},i=async e=>{await n(e),r()};export{r as fetchConfigs,i as updateConfigs};

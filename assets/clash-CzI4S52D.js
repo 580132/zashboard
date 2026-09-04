@@ -1,0 +1,1 @@
+import{K as e,h as t,m as n,q as r}from"./index-DyCeDAjn.js";var i=async()=>{let{data:i}=await r(),{data:a}=await e();t.value=i.rules.map(e=>{let t=e.proxy,n=t.startsWith(`route(`)?t.substring(6,t.length-1):t;return{...e,proxy:n}}),n.value=Object.values(a.providers)};export{i as fetchRules};
