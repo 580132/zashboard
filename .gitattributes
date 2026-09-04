@@ -1,0 +1,4 @@
+pnpm-lock.yaml merge=ours
+CHANGELOG.md merge=ours
+README.md merge=ours
+dist/** linguist-generated

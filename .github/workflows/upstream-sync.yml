@@ -1,0 +1,134 @@
+name: upstream-sync
+
+# NOTE: GitHub auto-disables scheduled workflows after 60 days of repo
+# inactivity. Any push (including this workflow's sync branch/PR activity
+# or a manual workflow_dispatch run) keeps the schedule alive.
+# This workflow NEVER auto-merges — it only opens a PR for human review.
+
+on:
+  schedule:
+    # Daily off-peak: 18:23 UTC
+    - cron: '23 18 * * *'
+  workflow_dispatch:
+
+permissions:
+  contents: write
+  pull-requests: write
+  issues: write
+
+jobs:
+  sync:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout with full history
+        uses: actions/checkout@v6
+        with:
+          fetch-depth: 0
+
+      - name: Configure merge driver for ours files
+        run: git config merge.ours.driver true
+
+      - name: Fetch upstream
+        run: |
+          git remote add upstream https://github.com/Zephyruso/zashboard.git 2>/dev/null || true
+          git fetch upstream main
+
+      - name: Skip if already up to date
+        id: check
+        run: |
+          BASE=$(git rev-parse HEAD)
+          UPSTREAM=$(git rev-parse upstream/main)
+          MERGE_BASE=$(git merge-base HEAD upstream/main)
+          echo "base=$BASE" >> "$GITHUB_OUTPUT"
+          echo "upstream=$UPSTREAM" >> "$GITHUB_OUTPUT"
+          if [ "$MERGE_BASE" = "$UPSTREAM" ]; then
+            echo "up_to_date=true" >> "$GITHUB_OUTPUT"
+            echo "Already up to date with upstream/main."
+          else
+            echo "up_to_date=false" >> "$GITHUB_OUTPUT"
+            echo "New upstream commits exist."
+          fi
+
+      - name: Skip if sync PR already open
+        id: existing
+        if: steps.check.outputs.up_to_date == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          OPEN=$(gh pr list --base main --head chore/sync-upstream --state open --json number --jq length)
+          echo "open_count=$OPEN" >> "$GITHUB_OUTPUT"
+          if [ "$OPEN" != "0" ]; then
+            echo "A sync PR is already open; skipping."
+          fi
+
+      - name: Merge upstream into sync branch
+        id: merge
+        if: steps.check.outputs.up_to_date == 'false' && steps.existing.outputs.open_count == '0'
+        run: |
+          git checkout -B chore/sync-upstream
+          set +e
+          git merge --no-commit upstream/main
+          STATUS=$?
+          set -e
+          if [ $STATUS -ne 0 ]; then
+            echo "conflict=true" >> "$GITHUB_OUTPUT"
+            CONFLICTS=$(git diff --name-only --diff-filter=U)
+            echo "conflict_files<<EOF" >> "$GITHUB_OUTPUT"
+            echo "$CONFLICTS" >> "$GITHUB_OUTPUT"
+            echo "EOF" >> "$GITHUB_OUTPUT"
+            # Abort so no conflict markers are ever committed.
+            git merge --abort
+          else
+            echo "conflict=false" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Open issue on merge conflict
+        if: steps.merge.outputs.conflict == 'true'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          FILES="${{ steps.merge.outputs.conflict_files }}"
+          gh issue create \
+            --title "upstream-sync conflict $(date -u +%F)" \
+            --body "Automatic merge of upstream/main into chore/sync-upstream conflicted. No markers were committed (merge aborted). Conflict files:\n\n\`\`\`\n$FILES\n\`\`\`\n\nResolve manually: \`git fetch upstream && git checkout -B chore/sync-upstream main && git merge upstream/main\`."
+
+      - name: Regenerate lockfile if needed
+        if: steps.merge.outputs.conflict == 'false'
+        run: |
+          if git diff --name-only HEAD | grep -q '^package.json$'; then
+            pnpm install --lockfile-only
+          else
+            echo "package.json unchanged; skipping lockfile regen."
+          fi
+
+      - name: Assert sing-box restore markers present
+        if: steps.merge.outputs.conflict == 'false'
+        run: |
+          grep -q 'Channel.Singbox' src/assembly/backend.ts
+          test -f src/api/singbox/client.ts
+          echo "sing-box restore markers OK."
+
+      - name: Push sync branch and open PR
+        if: steps.merge.outputs.conflict == 'false'
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: |
+          git status --porcelain
+          # Commit the merge only when there is something new to record.
+          if git diff --cached --quiet && [ -z "$(git diff --name-only)" ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse upstream/main)" ]; then
+            echo "Nothing to commit."
+          fi
+          git commit -m "chore: sync upstream/main" || echo "No changes to commit (already merged)."
+          git push -u origin chore/sync-upstream
+          gh pr create \
+            --base main \
+            --head chore/sync-upstream \
+            --title "chore: sync upstream/main" \
+            --body "Daily automated sync of Zephyruso/zashboard upstream/main. REVIEW ONLY — do not auto-merge.
+
+          - Merge performed with \`git merge --no-commit upstream/main\` (no merge-upstream API, no \`gh repo sync\`).
+          - Lockfile regenerated via \`pnpm install --lockfile-only\` only when package.json changed.
+          - Verified sing-box restore markers (Channel.Singbox in src/assembly/backend.ts, src/api/singbox/client.ts present).
+          - On conflict this workflow aborts the merge and opens an issue instead of committing markers.
+
+          Note: GitHub auto-disables scheduled workflows after 60 days of inactivity; any push keeps this schedule alive."
