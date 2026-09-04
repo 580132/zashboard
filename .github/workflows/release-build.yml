@@ -1,0 +1,65 @@
+# Fork-only: build dist in the cloud so no local toolchain is needed.
+# Do NOT enable upstream deploy.yml here: it needs secrets.PAT and
+# publishes to zephyruso names (ghcr.io/zephyruso/*, board.zash.run.place).
+# Note: scheduled/manual runs keep Actions alive (workflows auto-disable
+# after 60 days of repo inactivity).
+name: Release Build
+
+on:
+  push:
+    tags:
+      - 'v*-singbox.*'
+  workflow_dispatch:
+    inputs:
+      upload_to_release:
+        description: 'Existing release tag to attach dist.zip to (empty = artifact only)'
+        required: false
+        default: ''
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+
+      - uses: pnpm/action-setup@v6
+
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: pnpm
+
+      - name: Install dependencies
+        run: pnpm install --frozen-lockfile
+
+      - name: Verify sing-box restore intact
+        run: |
+          grep -q "Singbox" src/assembly/backend.ts
+          test -f src/api/singbox/client.ts
+
+      - name: Build
+        run: pnpm run build
+
+      - name: Zip dist
+        run: zip -r dist.zip dist
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: dist-${{ github.ref_name }}
+          path: dist.zip
+
+      - name: Attach to release (tag push)
+        if: startsWith(github.ref, 'refs/tags/')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: dist.zip
+
+      - name: Attach to release (manual)
+        if: github.event_name == 'workflow_dispatch' && inputs.upload_to_release != ''
+        run: gh release upload "${{ inputs.upload_to_release }}" dist.zip --clobber
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
