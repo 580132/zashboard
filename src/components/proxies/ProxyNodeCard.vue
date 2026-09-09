@@ -1,14 +1,6 @@
 <template>
   <div
-    ref="cardRef"
-    :class="
-      twMerge(
-        'bg-base-200 relative flex cursor-pointer flex-col items-start rounded-md hover:shadow-sm',
-        active ? 'bg-primary/85 sm:hover:bg-primary/95' : 'sm:hover:bg-base-300/50',
-        isSmallCard ? 'gap-1 p-1' : 'gap-2 p-2',
-        latencyTipAnimationClass,
-      )
-    "
+    :class="cardClass"
     @contextmenu.stop.prevent="handlerLatencyTest"
   >
     <div
@@ -58,13 +50,11 @@ import {
   highlightedProxyNode,
   scrollNodeIntoViewKey,
 } from '@/composables/proxiesScroll'
-import { scrollIntoCenter } from '@/helper/utils'
 import { proxyLatencyTest } from '@/assembly/proxies'
 import { getIPv6ByName, getTestUrl, proxyMap } from '@/assembly/proxies'
 import { IPv6test, proxyCardSize, proxySortType, truncateProxyName } from '@/store/settings'
 import { smartWeightsMap } from '@/store/smart'
-import { twMerge } from 'tailwind-merge'
-import { computed, inject, nextTick, onMounted, ref } from 'vue'
+import { computed, inject, nextTick, ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import LatencyTag from './LatencyTag.vue'
 import ProxyIcon from './ProxyIcon.vue'
@@ -76,7 +66,6 @@ const props = defineProps<{
   groupName?: string
 }>()
 
-const cardRef = ref()
 const node = computed(() => proxyMap.value[props.name])
 const isLatencyTesting = ref(false)
 const typeFormatter = (type: string) => {
@@ -102,6 +91,17 @@ const scrollNodeIntoView = inject(scrollNodeIntoViewKey, null)
 const latencyTipAnimationClass = computed(() =>
   highlightedProxyNode.value === props.name ? ['latency-highlight'] : [],
 )
+
+/*
+ * 这几段类名都是本组件自己写死的,唯一会打架的是底色,分支写掉就行 —— 不必再过一遍
+ * tailwind-merge。一次展开要挂几十张卡片,省的是几十次类名解析。
+ */
+const cardClass = computed(() => [
+  'relative flex cursor-pointer flex-col items-start rounded-md hover:shadow-sm',
+  props.active ? 'bg-primary/85 sm:hover:bg-primary/95' : 'bg-base-200 sm:hover:bg-base-300/50',
+  isSmallCard.value ? 'gap-1 p-1' : 'gap-2 p-2',
+  latencyTipAnimationClass.value,
+])
 const handlerLatencyTest = async () => {
   if (isLatencyTesting.value) return
 
@@ -113,31 +113,15 @@ const handlerLatencyTest = async () => {
     isLatencyTesting.value = false
   }
 
-  if (
-    [PROXY_SORT_TYPE.LATENCY_ASC, PROXY_SORT_TYPE.LATENCY_DESC].includes(proxySortType.value) &&
-    cardRef.value
-  ) {
+  if ([PROXY_SORT_TYPE.LATENCY_ASC, PROXY_SORT_TYPE.LATENCY_DESC].includes(proxySortType.value)) {
     // 高亮先标上:重排可能把这张卡挪出虚拟列表的渲染窗口,那时组件已经没了
     highlightProxyNode(props.name)
     // 等排序后的 DOM 落地再量位置,否则拿到的还是重排前的旧坐标。
     await nextTick()
-    // 虚拟列表里卡片可能已经不在窗口内,先让列表滚过去,它才会重新挂上
+    // 虚拟列表能定位尚未挂载的节点,位置提示交给上面的高亮。
     scrollNodeIntoView?.(props.name)
-    await nextTick()
-    if (cardRef.value) {
-      scrollIntoCenter(cardRef.value)
-    }
   }
 }
-
-onMounted(() => {
-  // 虚拟列表会在展开时把选中节点直接摆到视野里(无动画),不需要卡片再平滑滚一次
-  if (props.active && !scrollNodeIntoView) {
-    setTimeout(() => {
-      scrollIntoCenter(cardRef.value)
-    }, 300)
-  }
-})
 </script>
 
 <style scoped>

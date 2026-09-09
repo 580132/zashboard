@@ -1,5 +1,6 @@
 <template>
   <div
+    ref="columnRef"
     class="relative w-full"
     :style="{ height: `${totalSize}px` }"
   >
@@ -11,6 +12,7 @@
       v-for="row in virtualRows"
       :key="row.key.toString()"
       :data-index="row.index"
+      :data-proxy-page-item="data[row.index]"
       :ref="(el) => measureRow(el as Element | null)"
       class="absolute inset-x-0"
       :style="{ top: `${row.start - scrollMargin}px` }"
@@ -24,8 +26,9 @@
 </template>
 
 <script setup lang="ts">
+import { createVirtualRowShift, provideVirtualRowShift } from '@/composables/virtualRowShift'
 import { useVirtualizer } from '@tanstack/vue-virtual'
-import { computed, nextTick, onBeforeUnmount } from 'vue'
+import { computed, nextTick, onBeforeUnmount, ref } from 'vue'
 
 /*
  * 挂在「外部滚动容器」上的虚拟列表列。
@@ -84,7 +87,18 @@ const virtualizerOptions = computed(() => ({
   gap: props.gap,
 }))
 
+const columnRef = ref<HTMLDivElement>()
 const rowVirtualizer = useVirtualizer(virtualizerOptions)
+
+/*
+ * 行里的折叠卡片展开 / 收起时，后面的行改用 transform 跟着挪，不走逐帧重排。
+ * 动画收尾时它会回头调 measureElement，把卡片的新高度同步给 virtualizer。
+ */
+const virtualRowShift = createVirtualRowShift(
+  () => columnRef.value,
+  (row) => rowVirtualizer.value.measureElement(row),
+)
+provideVirtualRowShift(virtualRowShift)
 const virtualRows = computed(() => rowVirtualizer.value.getVirtualItems())
 const totalSize = computed(() => rowVirtualizer.value.getTotalSize())
 
@@ -109,7 +123,34 @@ const measureRow = (el: Element | null) => {
   })
 }
 
+/*
+ * 页面恢复位置时不再依赖易漂移的 scrollTop,而是先按稳定的 item key 把锚点挂载出来,
+ * 再由页面根据真实 DOM 偏移校准。校准也经由当前 virtualizer 下发,避免遗留一条尚未结束的
+ * scrollToIndex 对账任务。
+ */
+const scrollToItem = (name: string) => {
+  const index = props.data.indexOf(name)
+
+  if (index < 0) return false
+
+  rowVirtualizer.value.scrollToIndex(index, { align: 'start', behavior: 'auto' })
+
+  return true
+}
+
+const correctScrollBy = (delta: number) => {
+  const scrollElement = props.scrollElement
+
+  if (!scrollElement) return
+
+  rowVirtualizer.value.scrollToOffset(scrollElement.scrollTop + delta, { behavior: 'auto' })
+}
+
+defineExpose({ scrollToItem, correctScrollBy })
+
 onBeforeUnmount(() => {
+  virtualRowShift.destroy()
+
   for (const [key, size] of rowVirtualizer.value.itemSizeCache) {
     if (size > 0) {
       measuredSizes.set(sizeKey(String(key)), size)

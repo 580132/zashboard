@@ -3,12 +3,14 @@
  *
  *   pnpm build && node test/verify.mjs
  *
- * 两条主线:
+ * 三条主线:
  *   1. 懒挂载 —— 只挂视口附近的卡片、滚动时回收、占位高度顶住原位置,同时搜索 / 展开 /
  *      路由往返恢复滚动位置这些照旧;
  *   2. 延迟表 —— 延迟按测速 url 建全局表并缓存,所以三种写入都必须还能刷新界面:
  *      整体替换 proxyMap(fetchProxies)、乐观改 now(切节点)、往 history 里 push(面板测速)。
  *   第 2 条是最容易悄悄坏掉的:少了一处依赖追踪,界面就停在旧数字上,不报错。
+ *   3. 自动滚动 —— 路由往返按卡片锚点恢复；展开定位和测速重排定位都无动画
+ *      (动态行高下带动画的滚动会被沿途的测量修正打断,停在半路)。
  */
 import { parseArgs } from 'node:util'
 import { sleep, waitFor } from './lib/cdp.mjs'
@@ -123,20 +125,38 @@ try {
 
   section('原有交互')
   const keptTop = Math.round(initial.height / 3)
+  const pageAnchor = () =>
+    page.evaluateJson(`(() => {
+      const scroller = document.querySelector('.overflow-y-scroll')
+      const viewportTop = scroller.getBoundingClientRect().top
+      const items = [...document.querySelectorAll('[data-proxy-page-item]')]
+        .map((element) => ({ element, rect: element.getBoundingClientRect() }))
+        .filter(({ rect }) => rect.bottom > viewportTop)
+        .sort((a, b) => a.rect.top - b.rect.top)
+      const anchor = items[0]
+
+      return JSON.stringify(anchor ? {
+        item: anchor.element.dataset.proxyPageItem,
+        offset: anchor.rect.top - viewportTop,
+        scrollTop: scroller.scrollTop,
+      } : {})
+    })()`)
 
   await page.scrollTo(keptTop)
   await sleep(800)
+  const anchorBeforeRouteChange = await pageAnchor()
   await page.evaluate(`location.hash = '#/connections'`)
   await sleep(1500)
   await page.evaluate(`location.hash = '#/proxies'`)
   await sleep(2500)
 
-  const restored = await page.scrollMetrics()
+  const restoredAnchor = await pageAnchor()
 
   check(
-    '路由往返后滚动位置恢复',
-    Math.abs(restored.top - keptTop) < 40,
-    `${keptTop} → ${restored.top}`,
+    '路由往返后恢复同一张卡片及其视口偏移',
+    restoredAnchor.item === anchorBeforeRouteChange.item &&
+      Math.abs(restoredAnchor.offset - anchorBeforeRouteChange.offset) < 2,
+    `${anchorBeforeRouteChange.item}@${anchorBeforeRouteChange.offset}px → ${restoredAnchor.item}@${restoredAnchor.offset}px (scrollTop ${anchorBeforeRouteChange.scrollTop} → ${restoredAnchor.scrollTop})`,
   )
 
   await page.scrollTo(0)
@@ -167,7 +187,7 @@ try {
   })()`)
   await sleep(1000)
 
-  await page.clickSelector(`[data-group-name="${SELECTOR_GROUP}"] .collapse-title`, {
+  await page.clickSelector(`[data-group-name="${SELECTOR_GROUP}"] .collapse-motion-header`, {
     dx: 60,
     dy: 12,
   })
@@ -273,6 +293,131 @@ try {
   )
 
   await corePage.close()
+
+  section('自动滚动规则')
+
+  // 让激活节点落在列表末尾,并给各节点恢复递增延迟；窄屏下展开时必须瞬时定位到底部。
+  harness.mock.proxies[SELECTOR_GROUP].now = harness.mock.nodeNames.at(-1)
+  harness.mock.nodeNames.forEach((name, index) => {
+    harness.mock.proxies[name].history = [{ time: new Date().toISOString(), delay: 50 + index }]
+  })
+  await harness.setMockControl({ stableLatency: true, latencyDelayMs: 0, latencyValue: 999 })
+
+  const scrollPage = await harness.openProxiesPage({
+    viewport: { width: 390, height: 844, mobile: true },
+    settings: {
+      'config/two-columns': 'false',
+      'config/proxy-sort-type': 'latencyasc',
+      'cache/collapse-group-map': '{}',
+    },
+  })
+
+  await scrollPage.waitForCards(1)
+  await sleep(1200)
+  await scrollPage.evaluate(`(() => {
+    const originalScrollTo = HTMLElement.prototype.scrollTo
+    window.__proxyScrollCalls = []
+    HTMLElement.prototype.scrollTo = function (...args) {
+      if (this.classList.contains('proxies-scrollable-parent')) {
+        const options = args[0]
+        window.__proxyScrollCalls.push(
+          typeof options === 'object'
+            ? { top: options.top, behavior: options.behavior }
+            : { top: args[1] },
+        )
+      }
+      return originalScrollTo.apply(this, args)
+    }
+
+    const input = document.querySelector('input[placeholder*="earch"]')
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, 'value').set
+    setter.call(input, '${SELECTOR_GROUP}')
+    input.dispatchEvent(new Event('input', { bubbles: true }))
+  })()`)
+  await sleep(700)
+  await scrollPage.clickSelector(`[data-group-name="${SELECTOR_GROUP}"] .collapse-motion-header`, {
+    dx: 60,
+    dy: 12,
+  })
+  await sleep(1000)
+
+  const expansionScroll = await scrollPage.evaluateJson(`(() => {
+    const scroller = document.querySelector(
+      '[data-group-name="${SELECTOR_GROUP}"] .proxies-scrollable-parent'
+    )
+    return JSON.stringify({
+      top: scroller.scrollTop,
+      calls: window.__proxyScrollCalls,
+    })
+  })()`)
+
+  check(
+    '展开组定位激活节点使用瞬时滚动',
+    expansionScroll.top > 0 &&
+      expansionScroll.calls.some((call) => call.top > 0 && call.behavior !== 'smooth'),
+    `scrollTop ${expansionScroll.top}, ${JSON.stringify(expansionScroll.calls)}`,
+  )
+
+  // 回到顶部测速 Node-001；999ms 会把它从首屏排到末尾,定位同样瞬时,位置提示交给高亮。
+  await scrollPage.evaluate(`(() => {
+    const scroller = document.querySelector(
+      '[data-group-name="${SELECTOR_GROUP}"] .proxies-scrollable-parent'
+    )
+    scroller.scrollTo({ top: 0, behavior: 'auto' })
+    window.__proxyScrollCalls = []
+  })()`)
+  await sleep(500)
+
+  const testedNode = await scrollPage.evaluateJson(`(() => {
+    const cards = document.querySelectorAll(
+      '[data-group-name="${SELECTOR_GROUP}"] .proxies-scrollable-parent .cursor-pointer'
+    )
+    const card = [...cards].find((element) => element.innerText.startsWith('Node-001'))
+    const tag = card.querySelector('.latency-tag')
+    const rect = tag.getBoundingClientRect()
+
+    return JSON.stringify({
+      name: card.innerText.split('\\n')[0],
+      x: rect.x + rect.width / 2,
+      y: rect.y + rect.height / 2,
+    })
+  })()`)
+
+  await scrollPage.click(testedNode.x, testedNode.y)
+
+  const sawScroll = await waitFor(
+    () =>
+      scrollPage.evaluate(
+        `window.__proxyScrollCalls.some((call) => call.top > 0 && call.behavior !== 'smooth')`,
+      ),
+    { timeout: 5000, interval: 100 },
+  )
+  await sleep(1000)
+
+  const testedNodeVisible = await scrollPage.evaluate(`(() => {
+    const scroller = document.querySelector(
+      '[data-group-name="${SELECTOR_GROUP}"] .proxies-scrollable-parent'
+    )
+    const card = [...scroller.querySelectorAll('.cursor-pointer')].find(
+      (element) => element.innerText.split('\\n')[0] === ${JSON.stringify('Node-001 🇭🇰')}
+    )
+    const viewport = scroller.getBoundingClientRect()
+    const rect = card?.getBoundingClientRect()
+
+    return Boolean(rect && rect.top >= viewport.top && rect.bottom <= viewport.bottom)
+  })()`)
+
+  const usedSmooth = await scrollPage.evaluate(
+    `window.__proxyScrollCalls.some((call) => call.behavior === 'smooth')`,
+  )
+
+  check(
+    '按延迟排序后瞬时滚动到测速节点',
+    sawScroll !== null && testedNodeVisible && !usedSmooth,
+    JSON.stringify(await scrollPage.evaluate(`window.__proxyScrollCalls`)),
+  )
+
+  await scrollPage.close()
   await page.close()
 } finally {
   await harness.close()
