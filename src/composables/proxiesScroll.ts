@@ -1,58 +1,13 @@
-import { PROXY_CARD_SIZE } from '@/constant'
-import { findScrollableParent } from '@/helper/utils'
-import { minProxyCardWidth, proxyCardSize } from '@/store/settings'
-import { useCurrentElement, useElementSize, useInfiniteScroll } from '@vueuse/core'
-import { computed, nextTick, onMounted, ref, watch, type InjectionKey } from 'vue'
-
-export const useCalculateMaxProxies = (totalProxies: number, activeIndex: number) => {
-  const el = useCurrentElement()
-  const { width } = useElementSize(el)
-  const initMaxProxies = computed(() => {
-    return (
-      Math.max(Math.floor(width.value / minProxyCardWidth.value), 2) *
-      (proxyCardSize.value === PROXY_CARD_SIZE.LARGE ? 9 : 12)
-    )
-  })
-  const maxProxies = ref(Math.max(24, activeIndex + 12))
-
-  onMounted(() => {
-    watch(
-      initMaxProxies,
-      () => {
-        maxProxies.value = Math.max(maxProxies.value, initMaxProxies.value)
-      },
-      { immediate: true },
-    )
-
-    nextTick(() => {
-      const scrollEl = findScrollableParent(el.value as HTMLElement)
-
-      useInfiniteScroll(
-        scrollEl,
-        () => {
-          maxProxies.value = Math.min((maxProxies.value += initMaxProxies.value), totalProxies)
-        },
-        {
-          distance: 100,
-          canLoadMore: () => {
-            return maxProxies.value < totalProxies
-          },
-        },
-      )
-    })
-  })
-
-  return {
-    maxProxies,
-  }
-}
+import { ref, type InjectionKey } from 'vue'
 
 /*
  * 虚拟化之后,节点卡片可能不在渲染窗口里 —— 想滚到某个节点得让列表自己去滚,
- * 卡片拿不到自己的 DOM 也就无从滚起。ProxiesContent 提供它,非虚拟化的用法注入不到,
- * 退回原来的 scrollIntoCenter。
+ * 卡片拿不到自己的 DOM 也就无从滚起。由 ProxiesContent 提供。
+ * 定位一律瞬时:动态行高下带动画的滚动会被沿途的测量修正打断,停在半路。
  */
-export const scrollNodeIntoViewKey: InjectionKey<(name: string) => void> =
+export type ScrollProxyNodeIntoView = (name: string) => void
+
+export const scrollNodeIntoViewKey: InjectionKey<ScrollProxyNodeIntoView> =
   Symbol('scrollNodeIntoView')
 
 /*

@@ -206,6 +206,22 @@ export const createMockServer = async ({
     if (pathname === '/providers/rules') return json(res, { providers: {} })
     if (pathname === '/rules') return json(res, { rules: [] })
 
+    // 单节点测速会更新内核里的 history,随后页面重新 GET /proxies 才能看到排序变化。
+    // mock 也保留这个语义,否则只能测到请求成功,覆盖不到「测速后重排」这条真实链路。
+    const testedProxyName = (() => {
+      const proxyMatch = pathname.match(/^\/proxies\/([^/]+)\/delay$/)
+      if (proxyMatch) return decodeURIComponent(proxyMatch[1])
+
+      const providerMatch = pathname.match(/^\/providers\/proxies\/[^/]+\/([^/]+)\/healthcheck$/)
+      return providerMatch ? decodeURIComponent(providerMatch[1]) : ''
+    })()
+
+    if (testedProxyName && proxies[testedProxyName]) {
+      proxies[testedProxyName].history = [
+        { time: new Date().toISOString(), delay: control.latencyValue },
+      ]
+    }
+
     // 测速类端点(节点 / 组 / provider healthcheck)
     if (pathname.endsWith('/delay') || pathname.includes('/healthcheck')) {
       return setTimeout(() => json(res, { delay: control.latencyValue }), control.latencyDelayMs)
