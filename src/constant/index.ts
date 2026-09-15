@@ -1,5 +1,6 @@
 import {
   ArrowsRightLeftIcon,
+  ChartBarIcon,
   Cog6ToothIcon,
   CubeTransparentIcon,
   DocumentTextIcon,
@@ -59,6 +60,11 @@ export enum CONNECTIONS_TABLE_ACCESSOR_KEY {
   OutboundType = 'outboundType',
   FromOutbound = 'fromOutbound',
 }
+
+// 搜索隐藏列时的键全集：Close 是操作列，没有可搜索的值。
+export const CONNECTION_SEARCHABLE_KEYS = Object.values(CONNECTIONS_TABLE_ACCESSOR_KEY).filter(
+  (key) => key !== CONNECTIONS_TABLE_ACCESSOR_KEY.Close,
+)
 
 // 桌面表格与卡片列表共享同一份分组能力清单。分组字段必须有稳定、可读的离散值；
 // 操作列、时间、流量与瞬时速率只用于展示/排序，不参与分组。
@@ -255,7 +261,7 @@ export enum ROUTE_NAME {
 }
 
 export const ROUTE_ICON_MAP = {
-  [ROUTE_NAME.overview]: CubeTransparentIcon,
+  [ROUTE_NAME.overview]: ChartBarIcon,
   [ROUTE_NAME.proxies]: GlobeAltIcon,
   [ROUTE_NAME.connections]: ArrowsRightLeftIcon,
   [ROUTE_NAME.rules]: SwatchIcon,
