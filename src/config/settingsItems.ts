@@ -1,4 +1,6 @@
-import { SETTINGS_MENU_KEY } from '@/constant'
+import { ROUTE_ICON_MAP, ROUTE_NAME, SETTINGS_MENU_KEY } from '@/constant'
+import { HomeIcon, ServerIcon } from '@heroicons/vue/24/outline'
+import type { Component } from 'vue'
 
 export type SettingsCategoryItem = {
   key: string
@@ -12,6 +14,7 @@ export type SettingsCategory = {
   key: SETTINGS_MENU_KEY
   label: string
   description: string
+  icon: Component
   items: SettingsCategoryItem[]
 }
 
@@ -36,6 +39,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     key: SETTINGS_MENU_KEY.backend,
     label: 'backendSettings',
     description: 'settingsDescriptionBackend',
+    icon: ServerIcon,
     items: [
       {
         key: `${SETTINGS_MENU_KEY.backend}.backendSwitch`,
@@ -119,6 +123,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     key: SETTINGS_MENU_KEY.general,
     label: 'zashboardSettings',
     description: 'settingsDescriptionGeneral',
+    icon: HomeIcon,
     items: [
       {
         key: `${SETTINGS_MENU_KEY.general}.zashboardSettings.actions`,
@@ -252,6 +257,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     key: SETTINGS_MENU_KEY.overview,
     label: 'overviewSettings',
     description: 'settingsDescriptionOverview',
+    icon: ROUTE_ICON_MAP[ROUTE_NAME.overview],
     items: [
       {
         key: `${SETTINGS_MENU_KEY.overview}.splitOverviewPage`,
@@ -284,6 +290,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     key: SETTINGS_MENU_KEY.proxies,
     label: 'proxySettings',
     description: 'settingsDescriptionProxies',
+    icon: ROUTE_ICON_MAP[ROUTE_NAME.proxies],
     items: [
       {
         key: `${SETTINGS_MENU_KEY.proxies}.speedtestMode`,
@@ -381,6 +388,7 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
     key: SETTINGS_MENU_KEY.connections,
     label: 'connectionSettings',
     description: 'settingsDescriptionConnections',
+    icon: ROUTE_ICON_MAP[ROUTE_NAME.connections],
     items: [
       {
         key: `${SETTINGS_MENU_KEY.connections}.connectionStyle`,

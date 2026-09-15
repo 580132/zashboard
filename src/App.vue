@@ -10,6 +10,7 @@ import BackendManager from './components/settings/backend/BackendManager.vue'
 import UpdateConfigModal from './components/settings/backend/UpdateConfigModal.vue'
 import UpgradeCoreModal from './components/settings/backend/UpgradeCoreModal.vue'
 import { useAppearanceVars } from './composables/useAppearanceVars'
+import { useThemeColor } from './composables/useThemeColor'
 import { showUpdateConfigModal, showUpgradeCoreModal } from './composables/backendActions'
 import ConfirmDialogHost from './components/common/ConfirmDialogHost.vue'
 import { useKeyboard } from './composables/keyboard'
@@ -22,7 +23,7 @@ import {
 } from './helper/autoImportSettings'
 import { backgroundImage } from './helper/indexeddb'
 import { initNotification } from './helper/notification'
-import { getBackendFromUrl, isPreferredDark } from './helper/utils'
+import { getBackendFromUrl } from './helper/utils'
 import { disablePullToRefresh, emoji, font, theme } from './store/settings'
 import { backendList, setActiveBackend } from './store/setup'
 import type { Backend } from './types'
@@ -56,17 +57,8 @@ const fontClassName = computed(() => {
   )
 })
 
-const setThemeColor = () => {
-  if (!app.value) return
+const { setThemeColor } = useThemeColor(app)
 
-  const themeColor = getComputedStyle(app.value!).getPropertyValue('background-color').trim()
-  const metaThemeColor = document.querySelector('meta[name="theme-color"]')
-  if (metaThemeColor) {
-    metaThemeColor.setAttribute('content', themeColor)
-  }
-}
-
-watch(isPreferredDark, setThemeColor)
 watch(
   theme,
   () => {
@@ -176,8 +168,6 @@ const autoSwitchToURLBackendIfExists = () => {
 autoSwitchToURLBackendIfExists()
 
 onMounted(async () => {
-  setThemeColor()
-
   if (autoImportSettings.value) {
     await importSettingsFromUrl()
   }

@@ -284,14 +284,9 @@ import { activeBackend, activeUuid } from '@/store/setup'
 import {
   AdjustmentsHorizontalIcon,
   ArrowPathIcon,
-  ArrowsRightLeftIcon,
   ChevronLeftIcon,
   ChevronRightIcon,
-  CubeTransparentIcon,
-  GlobeAltIcon,
-  HomeIcon,
   MagnifyingGlassIcon,
-  ServerIcon,
 } from '@heroicons/vue/24/outline'
 import { useElementSize } from '@vueuse/core'
 import type { Component } from 'vue'
@@ -339,19 +334,16 @@ const clearPaneAnimation = () => {
   settingsPaneTransition.value = ''
 }
 
-const categoryPresentation: Record<SETTINGS_MENU_KEY, { icon: Component; component: Component }> = {
-  [SETTINGS_MENU_KEY.general]: { icon: HomeIcon, component: ZashboardSettings },
-  [SETTINGS_MENU_KEY.overview]: { icon: CubeTransparentIcon, component: OverviewSettings },
-  [SETTINGS_MENU_KEY.backend]: { icon: ServerIcon, component: BackendSettings },
-  [SETTINGS_MENU_KEY.proxies]: { icon: GlobeAltIcon, component: ProxiesSettings },
-  [SETTINGS_MENU_KEY.connections]: {
-    icon: ArrowsRightLeftIcon,
-    component: ConnectionsSettings,
-  },
+const categoryComponents: Record<SETTINGS_MENU_KEY, Component> = {
+  [SETTINGS_MENU_KEY.general]: ZashboardSettings,
+  [SETTINGS_MENU_KEY.overview]: OverviewSettings,
+  [SETTINGS_MENU_KEY.backend]: BackendSettings,
+  [SETTINGS_MENU_KEY.proxies]: ProxiesSettings,
+  [SETTINGS_MENU_KEY.connections]: ConnectionsSettings,
 }
 const allCategoryComponents: CategoryView[] = SETTINGS_CATEGORIES.map((category) => ({
   ...category,
-  ...categoryPresentation[category.key],
+  component: categoryComponents[category.key],
 }))
 
 const menuItems = computed(() => {
