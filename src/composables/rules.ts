@@ -80,15 +80,21 @@ export const useRuleHitTooltip = () => {
     return line
   }
 
-  const buildSection = (countText: string, at: string, lastTextKey: string) => {
+  // 从没命中过时后端给的是空串或零值时间,交给 dayjs 会凭空编出一个像模像样的最后命中时间
+  const formatHitTime = (count: number, at: string) => {
+    if (!count || !at) return t('unknown')
+
+    const time = dayjs(at)
+
+    return time.isValid() && time.year() > 1 ? time.format('YYYY-MM-DD HH:mm:ss') : t('unknown')
+  }
+
+  const buildSection = (countText: string, count: number, at: string, lastTextKey: string) => {
     const section = document.createElement('div')
 
     section.className = 'flex flex-col gap-1'
     section.append(buildLine(countText))
-    // 从没命中过时 hitAt 是空的,交给 dayjs 会被当成「现在」,凭空编出一个最后命中时间
-    if (at) {
-      section.append(buildLine(t(lastTextKey, { time: dayjs(at).format('YYYY-MM-DD HH:mm:ss') })))
-    }
+    section.append(buildLine(t(lastTextKey, { time: formatHitTime(count, at) })))
 
     return section
   }
@@ -102,8 +108,18 @@ export const useRuleHitTooltip = () => {
 
     content.className = 'flex flex-col gap-2 text-sm'
     content.append(
-      buildSection(t('ruleHitCount', { count: extra.hitCount }), extra.hitAt, 'ruleLastHit'),
-      buildSection(t('ruleMissCount', { count: extra.missCount }), extra.missAt, 'ruleLastMiss'),
+      buildSection(
+        t('ruleHitCount', { count: extra.hitCount }),
+        extra.hitCount,
+        extra.hitAt,
+        'ruleLastHit',
+      ),
+      buildSection(
+        t('ruleMissCount', { count: extra.missCount }),
+        extra.missCount,
+        extra.missAt,
+        'ruleLastMiss',
+      ),
     )
 
     showTip(event, content, {

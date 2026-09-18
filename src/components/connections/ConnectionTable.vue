@@ -141,7 +141,7 @@
             :style="{
               height: `${virtualRow.size}px`,
             }"
-            class="hover:bg-primary/85! hover:text-primary-content!"
+            class="hover:bg-(--table-hover)!"
             :class="[
               virtualRow.index % 2 === 0 && 'table-row-stripe',
               !isDragging ? 'cursor-pointer' : 'cursor-grabbing',
