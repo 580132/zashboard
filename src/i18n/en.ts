@@ -299,6 +299,7 @@ const en = {
   automaticDisconnection: 'Auto disconnect on node switch',
   backend: 'Backend',
   tunMode: 'TUN mode',
+  tunStack: 'TUN stack',
   upgradeCore: 'Upgrade core',
   upgradeCoreConfirm:
     'Upgrade the core now? The core will restart and the proxy service will be briefly interrupted.',

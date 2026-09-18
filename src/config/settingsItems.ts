@@ -103,6 +103,12 @@ export const SETTINGS_CATEGORIES: SettingsCategory[] = [
         section: 'settingsSectionNetworkListening',
       },
       {
+        key: `${SETTINGS_MENU_KEY.backend}.tunStack`,
+        label: 'tunStack',
+        section: 'settingsSectionNetworkListening',
+        keywords: ['tun', 'stack', 'gvisor', 'system', 'mixed', 'mips'],
+      },
+      {
         key: `${SETTINGS_MENU_KEY.backend}.allowLan`,
         label: 'allowLan',
         section: 'settingsSectionNetworkListening',

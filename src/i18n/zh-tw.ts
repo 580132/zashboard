@@ -305,6 +305,7 @@ const zhTW: LANG_MESSAGE = {
   upgradeToAlpha: '升級到 Alpha',
   updateGeoDatabase: '更新GEO',
   tunMode: 'Tun 模式',
+  tunStack: 'Tun 堆疊',
   truncateProxyName: '截斷節點名稱',
   disableProxiesPageTextSelect: '禁用代理頁文字選取',
   sourceIPLabels: '源IP標籤',

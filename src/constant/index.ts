@@ -249,6 +249,14 @@ export enum LOG_LEVEL {
   Silent = 'silent',
 }
 
+// 对应 mihomo constant/tun.go 的 StackTypeMapping
+export enum TUN_STACK {
+  gVisor = 'gVisor',
+  System = 'System',
+  Mixed = 'Mixed',
+  Mips = 'Mips',
+}
+
 export enum ROUTE_NAME {
   overview = 'overview',
   proxies = 'proxies',

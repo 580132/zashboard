@@ -301,6 +301,7 @@ const ru: LANG_MESSAGE = {
   automaticDisconnection: 'Автоматическое отключение',
   backend: 'Бэкенд',
   tunMode: 'Режим Tun',
+  tunStack: 'Стек Tun',
   upgradeCore: 'Обновить ядро до новой версии',
   upgradeCoreConfirm:
     'Обновить ядро сейчас? Ядро будет перезапущено, работа прокси ненадолго прервётся.',

@@ -175,8 +175,6 @@ const ruleColumns: ColumnDef<Rule>[] = [
     header: '#',
     id: 'index',
     accessorFn: (rule) => ruleIndexMap.value.get(rule) ?? 0,
-    // 行 hover 会把整行翻成 primary-content,淡色只能用 opacity —— 写死 text-base-content/*
-    // 的子元素不吃继承,会原样留在高亮底色上。
     cell: ({ row }) =>
       h(
         'span',
