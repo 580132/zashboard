@@ -1,13 +1,7 @@
 name: upstream-sync
 
-# NOTE: GitHub auto-disables scheduled workflows after 60 days of repo
-# inactivity. Any push (including this workflow's sync branch/PR activity
-# or a manual workflow_dispatch run) keeps the schedule alive.
-# This workflow NEVER auto-merges — it only opens a PR for human review.
-
 on:
   schedule:
-    # Daily off-peak: 18:23 UTC
     - cron: '23 18 * * *'
   workflow_dispatch:
 
@@ -26,7 +20,10 @@ jobs:
           fetch-depth: 0
 
       - name: Configure merge driver for ours files
-        run: git config merge.ours.driver true
+        run: git config --local merge.ours.driver true
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@v6
 
       - name: Fetch upstream
         run: |
@@ -76,7 +73,6 @@ jobs:
             echo "conflict_files<<EOF" >> "$GITHUB_OUTPUT"
             echo "$CONFLICTS" >> "$GITHUB_OUTPUT"
             echo "EOF" >> "$GITHUB_OUTPUT"
-            # Abort so no conflict markers are ever committed.
             git merge --abort
           else
             echo "conflict=false" >> "$GITHUB_OUTPUT"
@@ -90,7 +86,7 @@ jobs:
           FILES="${{ steps.merge.outputs.conflict_files }}"
           gh issue create \
             --title "upstream-sync conflict $(date -u +%F)" \
-            --body "Automatic merge of upstream/main into chore/sync-upstream conflicted. No markers were committed (merge aborted). Conflict files:\n\n\`\`\`\n$FILES\n\`\`\`\n\nResolve manually: \`git fetch upstream && git checkout -B chore/sync-upstream main && git merge upstream/main\`."
+            --body "Automatic merge conflicted. Conflict files:\n\n\`\`\`\n$FILES\n\`\`\`\n\nResolve: git fetch upstream && git checkout -B chore/sync-upstream main && git merge upstream/main"
 
       - name: Regenerate lockfile if needed
         if: steps.merge.outputs.conflict == 'false'
@@ -114,21 +110,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
           git status --porcelain
-          # Commit the merge only when there is something new to record.
-          if git diff --cached --quiet && [ -z "$(git diff --name-only)" ] && [ "$(git rev-parse HEAD)" = "$(git rev-parse upstream/main)" ]; then
-            echo "Nothing to commit."
-          fi
-          git commit -m "chore: sync upstream/main" || echo "No changes to commit (already merged)."
+          git commit -m "chore: sync upstream/main" || echo "No changes to commit."
           git push -u origin chore/sync-upstream
           gh pr create \
             --base main \
             --head chore/sync-upstream \
             --title "chore: sync upstream/main" \
-            --body "Daily automated sync of Zephyruso/zashboard upstream/main. REVIEW ONLY — do not auto-merge.
-
-          - Merge performed with \`git merge --no-commit upstream/main\` (no merge-upstream API, no \`gh repo sync\`).
-          - Lockfile regenerated via \`pnpm install --lockfile-only\` only when package.json changed.
-          - Verified sing-box restore markers (Channel.Singbox in src/assembly/backend.ts, src/api/singbox/client.ts present).
-          - On conflict this workflow aborts the merge and opens an issue instead of committing markers.
-
-          Note: GitHub auto-disables scheduled workflows after 60 days of inactivity; any push keeps this schedule alive."
+            --body "Daily automated sync. Review only, do not auto-merge. On conflict workflow opens an issue."
