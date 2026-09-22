@@ -1,15 +1,14 @@
-import { stripAnsi } from '@/helper/ansi'
-import { useStorage } from '@/helper/storage'
+import { useStorage } from '@/composables/use-storage'
 import { ref } from 'vue'
 
-// 完整的 logs ref 与流控状态(暂停 / 级别)由组装层维护并组装,store 仅直接引用,不再参与组装。
-export { initLogs, isPaused, logLevel, logs, stopLogs, supportedLogLevels } from '@/assembly/logs'
-
-// 纯视图侧的筛选状态(在 LogsPage 中过滤渲染,不参与日志组装)。
 export const logFilter = ref('')
 export const logTypeFilter = ref('')
 export const logFilterRegex = useStorage<string>('config/log-filter-regex', '')
 export const logFilterEnabled = useStorage<boolean>('config/log-filter-enabled', false)
+
+// ANSI 颜色码。base 的 helper/ansi.ts 已被上游删除,这里内联最小子集(SGR 码),
+// 足以把日志 payload 恢复成纯文本再匹配连接 id。
+const stripAnsi = (text: string) => text.replace(/\x1b\[[0-9;]*m/g, '')
 
 // sing-box 日志以连接 id 开头,如 [3829292130 5ms] router: match[0]
 export const getLogConnectionID = (payload: string) => {

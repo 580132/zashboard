@@ -4,7 +4,9 @@ import { subscribeStream } from '@/api/singbox/subscriptions'
 import { LOG_LEVEL } from '@/constant'
 import { LogLevel as PbLogLevel, type Log as PbLog } from '@/gen/daemon/started_service_pb'
 import type { Log } from '@/types'
-import type { LogsSubscription } from './types'
+
+// 订阅句柄与 driver 的 Subscription 同形。
+type LogsSubscription = { close: () => void }
 
 const logLevelToType = (level: PbLogLevel): Log['type'] => {
   switch (level) {

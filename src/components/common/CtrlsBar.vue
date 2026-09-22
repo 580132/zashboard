@@ -8,7 +8,7 @@
   </div>
 </template>
 <script lang="ts" setup>
-import { ctrlsBottom } from '@/composables/paddingViews'
+import { ctrlsBottom } from '@/helper/padding-views'
 import { isMiddleScreen } from '@/helper/utils'
 import { useElementBounding } from '@vueuse/core'
 import { onUnmounted, ref, watch } from 'vue'

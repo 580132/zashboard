@@ -47,7 +47,6 @@ const model = defineModel<boolean>('value', {
 const placeholder = `#app {\n  font-size: 14px;\n}`
 const draft = ref(customCSS.value)
 
-// 每次打开都以当前生效的样式为准，避免上次未保存的草稿留在输入框里。
 watch(model, (isOpen) => {
   if (isOpen) {
     draft.value = customCSS.value

@@ -29,10 +29,7 @@ import axios from 'axios'
 import { debounce } from 'lodash'
 import ReconnectingWebSocket from 'reconnectingwebsocket'
 import { shallowRef } from 'vue'
-
-// ==========================================================================
-// mihomo 标准
-// ==========================================================================
+import './http'
 
 export const fetchClashVersion = () => axios.get<{ version: string }>('/version')
 
@@ -57,9 +54,6 @@ export const fetchProxyLatencyAPI = (proxyName: string, url: string, timeout: nu
   })
 }
 
-// provider 节点可能不在全局 /proxies 映射中(或与其他 provider 的同名节点冲突),
-// 已知所属 provider 时用该端点测指定节点;与 /proxies/{name}/delay 共用内核的
-// getProxyDelay,同样返回 { delay }
 export const fetchProxyProviderLatencyAPI = (
   providerName: string,
   proxyName: string,
@@ -176,9 +170,6 @@ export const createClashWebSocket = <T>(url: string, searchParams?: Record<strin
   }
 }
 
-// 连通性探测。打的就是面板实际在用的那条 API(/version),所以它通了就是真通了。
-// 失败时区分「密码不对 / 端点不对 / 超时 / 不透明网络错误」四类 —— 浏览器只肯说最后
-// 一种,剩下三种能在这里确知的就别推给诊断去猜(见 helper/connectivity)。
 export const probeClashChannel = async (
   backend: Backend,
   timeout: number,
@@ -211,7 +202,6 @@ export const probeClashChannel = async (
       message: `HTTP ${res.status}`,
     }
   } catch (e) {
-    // 外部取消(切走了 / 组件卸载)不是失败,但调用方已经不看结果了,归入超时即可。
     return {
       ok: false,
       latency: latency(),
@@ -264,7 +254,6 @@ export const upgradeUIAPI = () => {
   return axios.post('/upgrade/ui')
 }
 
-// 面板设置同步。/storage/zashboard 是 mihomo 标准扩展。
 export const getStorageAPI = () => {
   return axios.get<Record<string, unknown>>(`/storage/zashboard`)
 }
@@ -277,11 +266,6 @@ export const deleteStorageAPI = () => {
   return axios.delete(`/storage/zashboard`)
 }
 
-// ==========================================================================
-// smart 附加(相对 mihomo 标准)
-// ==========================================================================
-
-// smart 内核的节点权重。是否暴露由数据决定(proxy.type === 'smart'),不走能力表。
 export const fetchSmartWeightsAPI = () => {
   return axios.get<{
     message: string
@@ -297,20 +281,8 @@ export const blockConnectionByIdAPI = (id: string) => {
   return axios.delete(`/connections/smart/${id}`)
 }
 
-// ==========================================================================
-// honk 附加(相对 mihomo 标准)
-// ==========================================================================
-
-// honk 的用户态运行时快照:outbound 计数、就绪池、warm 资源、TCP/UDP/NFQUEUE
-// 计量与 Score 选路原因。没有 WS,只能轮询。
 export const fetchHonkStatsAPI = () => axios.get<HonkStats>('/stats')
 
-// ==========================================================================
-// reFind 附加(相对 mihomo 标准)
-// ==========================================================================
-
-// reFind 的规则带稳定 uuid,按 uuid 切换启用状态;mihomo 走 PATCH /rules/disable。
-// 两者的选择由响应数据(rule.uuid 是否存在)决定,见 assembly/rules。
 export const toggleRuleDisabledRefindAPI = (uuid: string) => {
   return axios.put(`/rules/${encodeURIComponent(uuid)}`)
 }

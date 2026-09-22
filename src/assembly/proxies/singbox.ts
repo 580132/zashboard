@@ -1,18 +1,17 @@
 // sing-box API(gRPC daemon.StartedService)后端的代理「组装逻辑」。
 // 与 clash 的「拉取式」不同,这里是「流驱动」:订阅 SubscribeGroups / SubscribeOutbounds,
-// 每次推送直接重建门面 index.ts 的共享状态,因此选择/测速后无需手动刷新,
-// 结果会随流自动回填到 UI。
+// 每次推送直接重建共享状态(state),因此选择 / 测速后无需手动刷新,
+// 结果会随流自动回填到 UI。对外经 assembly/driver/singbox 暴露给 driver。
 import { getSingboxClient } from '@/api/singbox/client'
 import type { StreamHandle } from '@/api/singbox/streams'
 import { subscribeStream } from '@/api/singbox/subscriptions'
-import { disconnectByIdAPI } from '@/assembly/connections'
+import type { ProxiesPayload } from '@/assembly/driver/types'
+import { NOT_CONNECTED } from '@/constant'
 import type { Group, GroupItem, Groups, OutboundList } from '@/gen/daemon/started_service_pb'
-import { getConnectionChains } from '@/helper'
-import { activeConnections } from '@/store/connections'
-import { automaticDisconnection, iconReflectList, speedtestTimeout } from '@/store/settings'
+import { iconReflectList, speedtestTimeout } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Proxy } from '@/types'
-import { proxyGroupList, proxyMap, proxyProviederList } from './index'
+import { proxyGroupList, proxyMap, proxyProviederList } from './state'
 
 const getHistoryFromItem = (item: GroupItem): Proxy['history'] =>
   item.urlTestDelay > 0
@@ -89,21 +88,21 @@ const waitForURLTestResult = (timeout: number) => {
   }
 }
 
-// 由流数据原生组装共享状态(无 clash 的 provider / GLOBAL / 排序等概念)。
+// 用原始数据直接包装成门面状态(与 clash 的 provider / GLOBAL / 排序等无关)。
 const rebuild = () => {
   const proxies: Record<string, Proxy> = {}
 
-  // 1) 出站叶子节点(含延迟)
+  // 1) 叶子叶子节点(平铺)
   for (const item of outbounds.values()) {
     proxies[item.tag] = nodeToProxy(item)
   }
-  // 2) 用组内 items 补建缺失的叶子节点(outbounds 流可能晚到或不含某些成员)
+  // 2) 分组里的 items 里缺失的叶子节点(outbounds 流可能漏掉或不含某些成员)
   for (const group of groups.values()) {
     for (const item of group.items) {
       if (!proxies[item.tag]) proxies[item.tag] = nodeToProxy(item)
     }
   }
-  // 3) 分组条目(携带 all / now),始终覆盖同名节点
+  // 3) 分组条目(携带 all / now),初始按分组内节点顺序
   for (const group of groups.values()) {
     proxies[group.tag] = {
       name: group.tag,
@@ -116,7 +115,7 @@ const rebuild = () => {
       icon: '',
     }
   }
-  // 4) 把组内 items 的延迟回填到叶子节点(绝不动带 all 的组条目)
+  // 4) 分组里的 items 里延迟缓存回叶子节点(还原带 all 的分组条目)
   for (const group of groups.values()) {
     for (const item of group.items) {
       const node = proxies[item.tag]
@@ -125,7 +124,7 @@ const rebuild = () => {
       }
     }
   }
-  // 5) 应用用户配置的「名称→图标」映射(与 clash 一致,sing-box 流不含图标)
+  // 5) 应用用户设置的「名称映射图标」(与 clash 一致,sing-box 不带图标)
   for (const iconReflect of iconReflectList.value) {
     const node = proxies[iconReflect.name]
     if (node) node.icon = iconReflect.icon
@@ -177,7 +176,7 @@ const ensureSession = () => {
         resolved = true
         resolveReady()
       } else {
-        // URLTest RPC 只负责启动任务；历史记录更新后，结果才会通过此订阅推送。
+        // URLTest RPC 只会等来一次历史记录更新后,这里才把等待者放行。
         resolveURLTestWaiters()
       }
     }),
@@ -189,45 +188,40 @@ const ensureSession = () => {
   ]
 }
 
-// 在后端切换 / 登出时丢弃订阅。
-export const resetProxies = () => stop()
+// 换内核 / 断线时由 driver.reset() 触发的「关流」。
+export const resetSingboxProxies = () => stop()
 
-export const fetchProxies = async () => {
+export const fetchSingboxProxies = async (): Promise<ProxiesPayload> => {
   ensureSession()
   if (ready) await ready
   rebuild()
+
+  return { proxies: { ...proxyMap.value }, providers: [] }
 }
 
-export const handlerProxySelect = async (proxyGroupName: string, proxyName: string) => {
+export const selectSingboxOutbound = async (proxyGroupName: string, proxyName: string) => {
   const client = getSingboxClient()?.client
   const proxyGroup = proxyMap.value[proxyGroupName]
   if (!client || proxyGroup?.selectable === false) return
 
   await client.selectOutbound({ groupTag: proxyGroupName, outboundTag: proxyName })
 
-  // 乐观更新,流随后会确认
+  // 防止悬空:本地确认后再重建(流推送也会回填)。
   const group = groups.get(proxyGroupName)
   if (group) {
     group.selected = proxyName
     rebuild()
   }
-
-  if (automaticDisconnection.value) {
-    activeConnections.value
-      .filter((c) => getConnectionChains(c).includes(proxyGroupName))
-      // 切换节点的顺带动作,失败不该盖掉「已切换」这件主事
-      .forEach((c) => disconnectByIdAPI(c.id).catch(() => {}))
-  }
 }
 
-const runURLTest = async (outboundTag: string, timeout = speedtestTimeout.value) => {
+export const runSingboxURLTest = async (outboundTag: string, timeout = speedtestTimeout.value) => {
   ensureSession()
   if (ready) await ready
 
   const client = getSingboxClient()?.client
   if (!client) return
 
-  // 先注册等待，避免测速很快时结果推送早于一元 RPC 响应而丢失。
+  // 先注册等待者,避免测试很快时错过第一帧消息(一元 RPC 响应可能先失败)。
   const result = waitForURLTestResult(timeout)
   try {
     await Promise.all([client.uRLTest({ outboundTag }), result.promise])
@@ -236,19 +230,15 @@ const runURLTest = async (outboundTag: string, timeout = speedtestTimeout.value)
   }
 }
 
-// sing-box API 支持直接测试单个 outbound;节点卡片传节点自身的 tag。
-export const proxyLatencyTest = async (
-  proxyName: string,
-  _url?: string,
-  timeout = speedtestTimeout.value,
-) => {
-  await runURLTest(proxyName, timeout)
+// 测速后从分组条目/叶子节点的历史里取回延迟。
+export const getSingboxNodeDelay = (name: string): number => {
+  const history = proxyMap.value[name]?.history
+
+  return history?.length ? history[history.length - 1].delay : NOT_CONNECTED
 }
 
-export const proxyGroupLatencyTest = async (proxyGroupName: string) => {
-  await runURLTest(proxyGroupName)
-}
+export const getSingboxGroupDelays = (group: string): Record<string, number> => {
+  const g = groups.get(group)
 
-export const allProxiesLatencyTest = async () => {
-  await Promise.allSettled(Array.from(groups.keys()).map((tag) => runURLTest(tag)))
+  return g ? Object.fromEntries(g.items.map((item) => [item.tag, item.urlTestDelay])) : {}
 }
