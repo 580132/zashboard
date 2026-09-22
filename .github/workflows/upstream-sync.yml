@@ -22,6 +22,11 @@ jobs:
       - name: Configure merge driver for ours files
         run: git config --local merge.ours.driver true
 
+      - name: Configure git identity
+        run: |
+          git config --local user.name "github-actions[bot]"
+          git config --local user.email "41898282+github-actions[bot]@users.noreply.github.com"
+
       - name: Setup pnpm
         uses: pnpm/action-setup@v6
 
@@ -100,8 +105,10 @@ jobs:
       - name: Assert sing-box restore markers present
         if: steps.merge.outputs.conflict == 'false'
         run: |
-          grep -q 'Channel.Singbox' src/assembly/backend.ts
+          grep -q "Singbox = 'singbox'" src/assembly/backend.ts
+          grep -q "singbox: singboxDriver" src/assembly/driver/index.ts
           test -f src/api/singbox/client.ts
+          test -f src/assembly/driver/singbox.ts
           echo "sing-box restore markers OK."
 
       - name: Push sync branch and open PR
@@ -111,7 +118,8 @@ jobs:
         run: |
           git status --porcelain
           git commit -m "chore: sync upstream/main" || echo "No changes to commit."
-          git push -u origin chore/sync-upstream
+          # 分支是每次重建的临时载体,远端历史可能分叉,需 force。
+          git push -f -u origin chore/sync-upstream
           gh pr create \
             --base main \
             --head chore/sync-upstream \
