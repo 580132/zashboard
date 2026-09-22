@@ -57,7 +57,7 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
         run: |
-          OPEN=$(gh pr list --base main --head chore/sync-upstream --state open --json number --jq length)
+          OPEN=$(gh pr list --repo "$GITHUB_REPOSITORY" --base main --head chore/sync-upstream --state open --json number --jq length)
           echo "open_count=$OPEN" >> "$GITHUB_OUTPUT"
           if [ "$OPEN" != "0" ]; then
             echo "A sync PR is already open; skipping."
@@ -90,6 +90,7 @@ jobs:
         run: |
           FILES="${{ steps.merge.outputs.conflict_files }}"
           gh issue create \
+            --repo "$GITHUB_REPOSITORY" \
             --title "upstream-sync conflict $(date -u +%F)" \
             --body "Automatic merge conflicted. Conflict files:\n\n\`\`\`\n$FILES\n\`\`\`\n\nResolve: git fetch upstream && git checkout -B chore/sync-upstream main && git merge upstream/main"
 
@@ -121,6 +122,7 @@ jobs:
           # 分支是每次重建的临时载体,远端历史可能分叉,需 force。
           git push -f -u origin chore/sync-upstream
           gh pr create \
+            --repo "$GITHUB_REPOSITORY" \
             --base main \
             --head chore/sync-upstream \
             --title "chore: sync upstream/main" \
