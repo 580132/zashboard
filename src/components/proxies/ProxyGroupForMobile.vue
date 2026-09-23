@@ -6,10 +6,6 @@
     ref="cardWrapperRef"
     @click="handlerGroupClick"
   >
-    <!--
-      压暗强度与 .modal 的遮罩一致（daisyUI 默认 40%），淡入淡出也和弹窗遮罩同一条；
-      卡片自己的展开比这个快半拍，两条曲线都在 utilities/motion.css。
-    -->
     <Transition name="proxy-group-backdrop">
       <div
         v-if="modalMode"
@@ -54,10 +50,10 @@
 </template>
 
 <script setup lang="ts">
-import { useBounceOnVisible } from '@/composables/bouncein'
-import { useOverlayDimState } from '@/composables/dialog'
-import { disableProxiesPageScroll } from '@/composables/proxies'
-import { useRenderProxyList } from '@/composables/renderProxies'
+import { useBounceOnVisible } from '@/composables/use-bounce-on-visible'
+import { useOverlayDimState } from '@/composables/use-dialog-state'
+import { disableProxiesPageScroll } from '@/helper/proxies'
+import { useRenderProxyList } from '@/composables/use-render-proxy-list'
 import { PROXIES_PARENT_CLASS } from '@/helper/utils'
 import { proxyGroupLatencyTest } from '@/assembly/proxies'
 import { proxyMap } from '@/assembly/proxies'
@@ -80,7 +76,6 @@ const displayContent = ref(false)
 const showAllContent = ref(modalMode.value)
 const contentOpacity = ref(0)
 
-// 压暗层要连 iOS PWA 的状态栏一起暗下去，见 App.vue 的 setThemeColor。
 useOverlayDimState(modalMode)
 
 const cardWrapperRef = ref()
@@ -216,3 +211,27 @@ onUnmounted(() => {
 
 useBounceOnVisible(cardRef)
 </script>
+
+<style scoped>
+.proxy-group-backdrop-enter-active,
+.proxy-group-backdrop-leave-active {
+  transition: opacity 0.25s ease-out;
+}
+
+.proxy-group-backdrop-enter-from,
+.proxy-group-backdrop-leave-to {
+  opacity: 0;
+}
+
+.proxy-group-card {
+  --proxy-group-card-motion: 0.2s cubic-bezier(0, 0, 0.2, 1);
+  transition:
+    width var(--proxy-group-card-motion),
+    transform var(--proxy-group-card-motion),
+    max-height var(--proxy-group-card-motion);
+}
+
+.proxy-group-card-content {
+  transition: opacity var(--proxy-group-card-motion);
+}
+</style>

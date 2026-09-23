@@ -69,7 +69,7 @@
 
 <script setup lang="ts">
 import SettingItem from '@/components/settings/SettingItem.vue'
-import { GENERAL_ITEM_KEYS } from '@/config/settingsItems'
+import { GENERAL_ITEM_KEYS } from '@/config/settings-items'
 import { deleteBase64FromIndexedDB, LOCAL_IMAGE, saveBase64ToIndexedDB } from '@/helper/indexeddb'
 import {
   autoTheme,
@@ -206,9 +206,7 @@ const handlerFileChange = (e: Event) => {
 
     try {
       confirmApplyThemeByBackgroundTone(await detectBackgroundTone(imageURL))
-    } catch {
-      // Keep the current theme if tone detection fails.
-    }
+    } catch {}
 
     customBackgroundURL.value = LOCAL_IMAGE + '-' + Date.now()
     saveBase64ToIndexedDB(imageURL)

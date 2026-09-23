@@ -1,8 +1,12 @@
-// sing-box 后端的连接组装:订阅 gRPC SubscribeConnections,把 protobuf 事件
-// 维护成活跃连接表,并直接产出统一的 ConnectionsSnapshot(active 带瞬时速率、closed 为本拍增量)。
-// 速率由事件自带的 uplinkDelta/downlinkDelta 累计得到,CLOSED 事件直接产出已关闭连接 —— 无需快照 diff。
+// sing-box 后端的连接组装:订阅 gRPC SubscribeConnections,从 protobuf 事件
+// 维护成活跃连接表,按统一的 ConnectionsPayload 产出快照(connections 为活跃表、closed 为本拍增量)。
+//
+// emit 节奏定为 1s:统一层(assembly/connections)按「两次 emit 间 accessor 差分」算速率,
+// 100ms 节奏会把速率缩到 1/10;事件自带的 uplinkDelta/downlinkDelta 仅用于累计总量。
+// CLOSED 事件直接产出已关闭连接 —— 无需快照 diff。
 import { getSingboxClient } from '@/api/singbox/client'
 import { subscribeStream } from '@/api/singbox/subscriptions'
+import type { ConnectionAccessor, ConnectionsPayload, Stream } from '@/assembly/driver/types'
 import { PROXY_TYPE } from '@/constant'
 import {
   ConnectionEventType,
@@ -10,28 +14,19 @@ import {
   type Connection as PbConnection,
 } from '@/gen/daemon/started_service_pb'
 import type { Connection } from '@/types'
-import { shallowRef, type Ref } from 'vue'
-import {
-  createGetConnectionDisplayValue,
-  createGetConnectionVisibleSearchValues,
-  type ConnectionAccessor,
-  type ConnectionsSnapshot,
-} from './accessor'
+import { shallowRef } from 'vue'
 
-const fetchSingboxConnections = (): {
-  data: Ref<ConnectionsSnapshot | undefined>
-  close: () => void
-} => {
-  const data = shallowRef<ConnectionsSnapshot>()
+const fetchSingboxConnections = (): Stream<ConnectionsPayload> => {
+  const data = shallowRef<ConnectionsPayload>()
 
-  // 活跃连接表,条目已带瞬时速率。每次变更都整体替换条目(immutable),不就地改写,
+  // 活跃连接表。条目每次变更都整体替换(immutable),不就地改写,
   // 因此 emit 直接产出表内引用即可,无需再拷贝。
   const conns = new Map<string, Connection>()
   // 本窗口新关闭的连接,emit 时随快照一并产出。
   let newlyClosed: Connection[] = []
   let timer: ReturnType<typeof setTimeout> | null = null
 
-  // UPDATE 事件不携带 connection,只有 id + delta;速率即取本秒 delta(与官方 dashboard 一致)。
+  // UPDATE 事件不携带 connection,只有 id + delta;此处速率仅供累计,统一层会按 emit 间隔重算。
   const enrich = (c: PbConnection | Connection, down: number, up: number): Connection =>
     Object.assign({}, c, { downloadSpeed: down, uploadSpeed: up }) as Connection
 
@@ -46,14 +41,14 @@ const fetchSingboxConnections = (): {
   const emit = () => {
     timer = null
     data.value = {
-      active: Array.from(conns.values()),
+      connections: Array.from(conns.values()),
       closed: newlyClosed,
     }
     newlyClosed = []
   }
   const scheduleEmit = () => {
     if (timer) return
-    timer = setTimeout(emit, 100)
+    timer = setTimeout(emit, 1000)
   }
 
   const handle = subscribeStream<ConnectionEvents>('connections', (msg) => {
@@ -78,7 +73,7 @@ const fetchSingboxConnections = (): {
             if (event.connection.closedAt > 0n) close(event.id, event.connection)
             else conns.set(event.id, enrich(event.connection, downDelta, upDelta))
           } else {
-            // 仅 delta:沿用上次的连接,累加总量,速率取本拍 delta。
+            // 仅 delta:沿用上次的连接,累加总量。
             const prev = conns.get(event.id)
             if (prev) {
               const s = asSingbox(prev)
@@ -100,7 +95,7 @@ const fetchSingboxConnections = (): {
         }
         case ConnectionEventType.CONNECTION_EVENT_CLOSED: {
           // CLOSED 可能带最终连接快照(最终流量、closedAt);否则回退到活跃表内现有数据。
-          // 同窗口内 NEW+CLOSED 的短连接也能在此被收入 closed,不丢失。
+          // 同窗口内 NEW+CLOSED 的短连接也能在此被收进 closed,不丢失。
           close(event.id, event.connection)
           break
         }
@@ -129,12 +124,6 @@ const closeAllSingboxConnections = async () => {
   if (!client) return
   await client.closeAllConnections({})
 }
-
-export const disconnectByIdAPI = closeSingboxConnection
-
-export const disconnectAllAPI = closeAllSingboxConnections
-
-export const fetchConnectionsAPI = fetchSingboxConnections
 
 // 拆分 "ip:port" / "[ipv6]:port"
 const splitHostPort = (value: string): [string, string] => {
@@ -221,7 +210,4 @@ export const connectionAccessor: ConnectionAccessor = {
   smartBlock: () => undefined,
 }
 
-export const getConnectionDisplayValue = createGetConnectionDisplayValue(connectionAccessor)
-
-export const getConnectionVisibleSearchValues =
-  createGetConnectionVisibleSearchValues(connectionAccessor)
+export { closeAllSingboxConnections, closeSingboxConnection, fetchSingboxConnections }

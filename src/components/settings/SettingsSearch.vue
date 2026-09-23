@@ -92,13 +92,13 @@
 </template>
 
 <script setup lang="ts">
-import { isSettingHidden, isSettingRendered } from '@/composables/settings'
+import { isSettingHidden, isSettingRendered } from '@/helper/settings'
 import {
   SETTINGS_CATEGORIES,
   SETTINGS_MENU_LABELS,
   type SettingsCategory,
   type SettingsCategoryItem,
-} from '@/config/settingsItems'
+} from '@/config/settings-items'
 import { SETTINGS_MENU_KEY } from '@/constant'
 import {
   ChevronRightIcon,

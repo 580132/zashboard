@@ -1,6 +1,6 @@
 <template>
   <div
-    class="home-page flex size-full"
+    class="home-page bg-base-200 flex size-full"
     :class="sidebarLayoutCollapsed ? 'sidebar-collapsed' : 'sidebar-expanded'"
   >
     <div
@@ -29,7 +29,7 @@
 
         <template v-if="isMiddleScreen">
           <div
-            class="bg-base-100/20 dock dock-xs z-10 h-14 w-auto"
+            class="bg-base-100/20 dock dock-xs absolute right-2 left-2 z-30 h-14 w-auto rounded-3xl"
             :style="{
               padding: '0',
               bottom: 'calc(var(--spacing) * 2 + env(safe-area-inset-bottom))',
@@ -73,13 +73,13 @@
 </template>
 
 <script setup lang="ts">
-import { isBackendAvailable } from '@/assembly/backend'
+import { isBackendAvailable } from '@/assembly/probe'
 import { startBackendSession } from '@/assembly/session'
 import SideBar from '@/components/sidebar/SideBar.vue'
-import { dockTop } from '@/composables/paddingViews'
+import { dockTop } from '@/helper/padding-views'
 import { checkUIUpdate } from '@/assembly/version'
-import { pageTransitionMode, pageTransitionName } from '@/composables/pageTransition'
-import { useSwipeRouter } from '@/composables/swipe'
+import { pageTransitionMode, pageTransitionName } from '@/helper/page-transition'
+import { useSwipeRouter } from '@/composables/use-swipe-router'
 import { ROUTE_ICON_MAP } from '@/constant'
 import { renderRoutes } from '@/helper'
 import { isMiddleScreen } from '@/helper/utils'
@@ -127,9 +127,6 @@ watch(
 
 const documentVisible = useDocumentVisibility()
 
-// 息屏 / 切走期间后端可能已经没了(睡眠、换网、内核重启)。回到前台先确认一次,
-// 连不上就重开会话 —— 探测失败会把 BackendConnectionError 顶出来,
-// 由它给出诊断、重试和切换后端,这里不再自己弹一个只能二选一的对话框。
 watch(
   documentVisible,
   async () => {
@@ -138,7 +135,6 @@ watch(
     const uuid = activeBackend.value.uuid
 
     if (await isBackendAvailable(activeBackend.value)) return
-    // 探测期间用户可能已经自己切走了,别把新后端的会话也重开一遍。
     if (uuid === activeUuid.value) startBackendSession()
   },
   {
@@ -153,3 +149,87 @@ watch(documentVisible, () => {
 
 checkUIUpdate()
 </script>
+
+<style>
+.custom-background .home-page {
+  background-color: transparent;
+}
+
+.dock {
+  backdrop-filter: blur(20px) saturate(180%);
+  border: 1px solid color-mix(in srgb, var(--color-base-content) 8%, transparent);
+  box-shadow:
+    0 4px 16px color-mix(in srgb, var(--color-base-content) 6%, transparent),
+    inset 0 1px 0 color-mix(in srgb, white 35%, transparent),
+    inset 0 0 0 1px color-mix(in srgb, white 6%, transparent);
+}
+
+.slide-right-enter-active,
+.slide-right-leave-active,
+.slide-left-enter-active,
+.slide-left-leave-active {
+  transition: transform var(--page-transition-duration) var(--page-transition-ease);
+  position: absolute;
+  left: 0;
+  top: 0;
+  width: 100%;
+  height: 100%;
+  will-change: transform;
+  backface-visibility: hidden;
+}
+
+.slide-left-enter-from {
+  transform: translateX(100%);
+}
+.slide-left-enter-to {
+  transform: translateX(0);
+}
+.slide-left-leave-from {
+  transform: translateX(0);
+}
+.slide-left-leave-to {
+  transform: translateX(-100%);
+}
+
+.slide-right-enter-from {
+  transform: translateX(-100%);
+}
+.slide-right-enter-to {
+  transform: translateX(0);
+}
+.slide-right-leave-from {
+  transform: translateX(0);
+}
+.slide-right-leave-to {
+  transform: translateX(100%);
+}
+
+.page-enter-active,
+.page-leave-active {
+  transition: opacity 0.2s ease-in-out;
+  will-change: opacity;
+}
+.page-enter-from,
+.page-leave-to {
+  opacity: 0;
+}
+
+.custom-background :is(.page-enter-active, .page-leave-active) {
+  transition: none;
+  will-change: auto;
+}
+.custom-background :is(.page-enter-from, .page-leave-to) {
+  opacity: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .slide-right-enter-active,
+  .slide-right-leave-active,
+  .slide-left-enter-active,
+  .slide-left-leave-active,
+  .page-enter-active,
+  .page-leave-active {
+    transition-duration: 0.01ms;
+  }
+}
+</style>

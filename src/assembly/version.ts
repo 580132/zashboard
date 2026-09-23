@@ -1,30 +1,30 @@
 // 组装层 · 版本与升级。
-// fetchVersionAPI 按通道选择 Clash /version 或 sing-box gRPC getVersion,
-// 并把结果统一成 { data: { version } } 形状。
+// fetchVersion 经 driver 路由到当前后端(Clash /version 或 sing-box gRPC getVersion)。
 // 版本字符串是 core 轴(assembly/backend.ts)的唯一来源:这里探测完成后写入 core,
 // 后端切换的瞬间先重置为 'unknown',避免沿用上一个后端的结论。
-import { fetchClashVersion, restartCoreAPI, upgradeCoreAPI, upgradeUIAPI } from '@/api/clash'
+import DaeLogo from '@/assets/images/dae.jpg'
 import HonkLogo from '@/assets/images/honk.svg'
 import MetacubexLogo from '@/assets/images/metacubex.jpg'
 import SingBoxLogo from '@/assets/images/sing-box.svg'
 import { MIHOMO, MIHOMO_CHANNEL } from '@/constant'
-import { getRequestErrorMessage } from '@/helper/requestError'
+import { fetchWithLocalCache } from '@/helper/cache'
+import { getRequestErrorMessage } from '@/helper/request-error'
 import { autoUpgradeCore, autoUpgradeDashboard, checkUpgradeCore } from '@/store/settings'
 import { activeBackend } from '@/store/setup'
 import type { Backend } from '@/types'
 import { computed, nextTick, ref } from 'vue'
-import { apiVersion, can, Channel, channel, core, Core, resetCore } from './backend'
+import { can, core, Core, resetCore } from './backend'
+import { fetchCapabilities, resetCapabilities } from './capabilities'
+import { driver } from './driver'
 
 export const version = ref()
 export const isCoreUpdateAvailable = ref(false)
+export const isUIUpdateAvailable = ref(false)
 export const zashboardVersion = ref(__APP_VERSION__)
 
-// 切后端时本来就要打一次 /version,顺手把它的结果暴露成连通性状态,
-// 给切换提示用 —— 不额外发探测请求,量的也正是实际在用的那条 API。
 export type BackendProbe = {
   uuid: string
   status: 'probing' | 'connected' | 'failed'
-  // 拿到 /version 响应的耗时(ms),failed 时无意义。
   latency: number
   message: string
 }
@@ -35,21 +35,25 @@ export const backendProbe = ref<BackendProbe | undefined>()
 // 仅 sing-box API(GetStartedAt)提供,Clash /version 无运行时长。
 export const startedAt = ref(0)
 
+// sing-box 的版本串带 'sing-box' 标记(gRPC 通道的 type 即为 singbox,版本串可能缺前缀);
 // honk 的 /version 返回 "honk <semver>"(见 honk-core/src/clash_api.rs 的 version handler)。
 const detectCore = (versionString: string): Core => {
-  if (!versionString) return Core.Unknown
-  if (versionString.includes('sing-box')) return Core.Singbox
+  if (versionString.includes('sing-box') || activeBackend.value?.type === 'singbox')
+    return Core.Singbox
   if (/\bhonk\b/i.test(versionString)) return Core.Honk
+  if (activeBackend.value?.type === 'dae') return Core.Dae
+  if (!versionString) return Core.Unknown
   return Core.Mihomo
 }
 
-// 内核品牌的展示信息(logo / 官网链接)。纯展示,不是能力门控,故允许 view 使用。
 export const coreBrand = computed(() => {
   switch (core.value) {
     case Core.Singbox:
       return { logo: SingBoxLogo, url: 'https://github.com/sagernet/sing-box' }
     case Core.Honk:
       return { logo: HonkLogo, url: 'https://github.com/Glassyiris/honk' }
+    case Core.Dae:
+      return { logo: DaeLogo, url: 'https://github.com/daeuniverse/dae' }
     default:
       return {
         logo: MetacubexLogo,
@@ -74,19 +78,7 @@ export const mihomo = computed<[MIHOMO, string] | undefined>(() => {
   }
 })
 
-const fetchSingboxVersion = async () => {
-  const { getSingboxClient } = await import('@/api/singbox/client')
-  const client = getSingboxClient()?.client
-  if (!client) return { data: { version: 'sing-box' } }
-  const v = await client.getVersion({})
-  apiVersion.value = v.apiVersion
-  const version = v.version.includes('sing-box') ? v.version : `sing-box ${v.version}`
-  return { data: { version } }
-}
-
-export const fetchVersionAPI = () =>
-  channel.value === Channel.Singbox ? fetchSingboxVersion() : fetchClashVersion()
-
+// sing-box 的运行时长来自 gRPC GetStartedAt(仅 type=singbox 有能力,can 已门控)。
 const fetchSingboxStartedAt = async (): Promise<number> => {
   const { getSingboxClient } = await import('@/api/singbox/client')
   const client = getSingboxClient()?.client
@@ -99,12 +91,19 @@ const fetchSingboxStartedAt = async (): Promise<number> => {
   }
 }
 
-const probeBackend = async (backend: Backend) => {
+export const restartCore = () => driver().system.restartCore()
+
+export const upgradeCore = (channel: 'release' | 'alpha' | 'auto') =>
+  driver().system.upgradeCore(channel)
+
+export const upgradeUI = () => driver().system.upgradeUI()
+
+const probeBackendVersion = async (backend: Backend) => {
   const startAt = Date.now()
-  let data
+  let versionString: string
 
   try {
-    ;({ data } = await fetchVersionAPI())
+    versionString = await driver().system.fetchVersion()
   } catch (e) {
     if (activeBackend.value?.uuid === backend.uuid) {
       backendProbe.value = {
@@ -117,11 +116,15 @@ const probeBackend = async (backend: Backend) => {
     throw e
   }
 
-  // 探测期间用户可能又切了后端,过期结果直接丢弃。
   if (activeBackend.value?.uuid !== backend.uuid) return
 
-  version.value = data?.version || ''
+  version.value = versionString
   core.value = detectCore(version.value)
+
+  if (backend.type === 'dae') {
+    await fetchCapabilities()
+  }
+
   backendProbe.value = {
     uuid: backend.uuid,
     status: 'connected',
@@ -132,30 +135,25 @@ const probeBackend = async (backend: Backend) => {
 
   if (!can('coreUpdateCheck') || !checkUpgradeCore.value || backend.disableUpgradeCore) return
 
-  isCoreUpdateAvailable.value = await fetchBackendUpdateAvailableAPI()
+  isCoreUpdateAvailable.value = await fetchIsCoreUpdateAvailable()
 
   if (isCoreUpdateAvailable.value && autoUpgradeCore.value) {
-    // 自动升级不是用户点的,失败静默
-    upgradeCoreAPI('auto').catch(() => {})
+    upgradeCore('auto').catch(() => {})
   }
 }
 
-// 当前后端的内核探测。core 未就绪前依赖它的判断都不可信,
-// 需要等结论的调用方(如登录后的设置同步)用 coreReady() 等待。
 let probe: Promise<void> = Promise.resolve()
 
 export const coreReady = async () => {
-  // 先让会话的 watcher 跑完,确保拿到的是新后端的探测,而非上一次的残留。
   await nextTick()
   await probe
 }
 
-// 由 assembly/session 在每次会话开始时调用:先把上一个后端的结论清干净,
-// 再对当前后端重新探测。返回的 promise 只给 coreReady 用,调用方不必等。
 export const probeActiveBackend = () => {
   const backend = activeBackend.value
 
   resetCore()
+  resetCapabilities()
   version.value = ''
   startedAt.value = 0
   isCoreUpdateAvailable.value = false
@@ -163,54 +161,21 @@ export const probeActiveBackend = () => {
     ? { uuid: backend.uuid, status: 'probing', latency: 0, message: '' }
     : undefined
 
-  probe = backend ? probeBackend(backend).catch(() => {}) : Promise.resolve()
+  probe = backend ? probeBackendVersion(backend).catch(() => {}) : Promise.resolve()
   return probe
 }
 
-const CACHE_DURATION = 1000 * 60 * 60
+const fetchIsCoreUpdateAvailable = async () => {
+  const versionNumber = mihomo.value?.[1] ?? version.value
+  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(
+    MIHOMO_CHANNEL[mihomo.value?.[0] ?? MIHOMO.Meta].check_update_url,
+    versionNumber,
+  )
 
-interface CacheEntry<T> {
-  timestamp: number
-  version: string
-  data: T
+  return !assets.some(({ name }) => name.includes(versionNumber))
 }
 
-async function fetchWithLocalCache<T>(url: string, version: string): Promise<T> {
-  const cacheKey = 'cache/' + url
-  const cacheRaw = localStorage.getItem(cacheKey)
-
-  if (cacheRaw) {
-    try {
-      const cache: CacheEntry<T> = JSON.parse(cacheRaw)
-      const now = Date.now()
-
-      if (now - cache.timestamp < CACHE_DURATION && cache.version === version) {
-        return cache.data
-      } else {
-        localStorage.removeItem(cacheKey)
-      }
-    } catch (e) {
-      console.warn('Failed to parse cache for', url, e)
-    }
-  }
-
-  const response = await fetch(url)
-  if (!response.ok) {
-    throw new Error(`Fetch failed: ${response.status} ${response.statusText}`)
-  }
-
-  const data: T = await response.json()
-  const newCache: CacheEntry<T> = {
-    timestamp: Date.now(),
-    version,
-    data,
-  }
-
-  localStorage.setItem(cacheKey, JSON.stringify(newCache))
-  return data
-}
-
-export const fetchIsUIUpdateAvailable = async () => {
+export const checkUIUpdate = async () => {
   const { tag_name } = await fetchWithLocalCache<{ tag_name: string }>(
     'https://api.github.com/repos/580132/zashboard/releases/latest',
     zashboardVersion.value,
@@ -220,33 +185,10 @@ export const fetchIsUIUpdateAvailable = async () => {
   // compare against the base version only.
   const baseTag = tag_name?.replace(/-singbox.*$/, '')
 
-  return Boolean(baseTag && baseTag !== `v${zashboardVersion.value}`)
-}
+  isUIUpdateAvailable.value = Boolean(baseTag && baseTag !== `v${zashboardVersion.value}`)
 
-const check = async (url: string, versionNumber: string) => {
-  const { assets } = await fetchWithLocalCache<{ assets: { name: string }[] }>(url, versionNumber)
-  const alreadyLatest = assets.some(({ name }) => name.includes(versionNumber))
-
-  return !alreadyLatest
-}
-
-export const fetchBackendUpdateAvailableAPI = async () => {
-  return await check(
-    MIHOMO_CHANNEL[mihomo.value?.[0] ?? MIHOMO.Meta].check_update_url,
-    mihomo.value?.[1] ?? version.value,
-  )
-}
-
-// 仪表盘(UI)更新检查,迁自 composables/settings.ts 的 useSettings。
-export const isUIUpdateAvailable = ref(false)
-
-export const checkUIUpdate = async () => {
-  isUIUpdateAvailable.value = await fetchIsUIUpdateAvailable()
   if (isUIUpdateAvailable.value && autoUpgradeDashboard.value) {
     // 自动升级不是用户点的,失败静默
-    upgradeUIAPI().catch(() => {})
+    upgradeUI().catch(() => {})
   }
 }
-
-// 内核 / UI 维护动作(Clash 专属,无后端分支),经版本域门面暴露给 view。
-export { restartCoreAPI, upgradeCoreAPI, upgradeUIAPI }
