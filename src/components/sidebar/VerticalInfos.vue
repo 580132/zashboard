@@ -1,6 +1,6 @@
 <template>
   <div class="flex flex-col items-center gap-2 px-1.5 pt-1 pb-2">
-    <div class="sidebar-stats-card">
+    <div class="sidebar-stats-card bg-base-100">
       <div
         v-for="item in sidebarStatItems"
         :key="item.key"
@@ -49,7 +49,6 @@ const { showTip } = useTooltip()
   flex-direction: column;
   overflow: hidden;
   border-radius: 10px;
-  background-color: var(--color-base-100);
   box-shadow:
     inset 0 0 0 1px color-mix(in srgb, var(--color-base-content) 8%, transparent),
     0 1px 2px color-mix(in srgb, var(--color-base-content) 5%, transparent);

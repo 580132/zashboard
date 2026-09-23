@@ -6,7 +6,7 @@
     <div class="setting-item-label max-sm:w-full max-sm:flex-none">
       {{ $t('customBackgroundURL') }}
     </div>
-    <div class="join min-w-0 flex-1">
+    <div class="join w-48 max-sm:w-full">
       <TextInput
         class="join-item min-w-0 flex-1"
         v-model="customBackgroundURL"
@@ -20,13 +20,6 @@
         <ArrowUpTrayIcon class="h-4 w-4" />
       </button>
     </div>
-    <button
-      class="btn btn-circle btn-sm"
-      v-if="customBackgroundURL"
-      @click="displayBgProperty = !displayBgProperty"
-    >
-      <AdjustmentsHorizontalIcon class="h-4 w-4" />
-    </button>
     <input
       ref="inputFileRef"
       type="file"
@@ -37,9 +30,10 @@
   </SettingItem>
   <SettingItem
     :setting-key="k.transparent"
-    :when="!!customBackgroundURL && displayBgProperty"
+    :when="!!customBackgroundURL"
+    class="settings-dependent-item"
   >
-    <div class="setting-item-label">
+    <div class="setting-item-label shrink-0">
       {{ $t('transparent') }}
     </div>
     <input
@@ -47,14 +41,15 @@
       min="0"
       max="100"
       v-model="dashboardTransparent"
-      class="range max-w-64"
+      class="range w-48 max-w-full min-w-0"
     />
   </SettingItem>
   <SettingItem
     :setting-key="k.blurIntensity"
-    :when="!!customBackgroundURL && displayBgProperty"
+    :when="!!customBackgroundURL"
+    class="settings-dependent-item"
   >
-    <div class="setting-item-label">
+    <div class="setting-item-label shrink-0">
       {{ $t('blurIntensity') }}
     </div>
     <input
@@ -62,7 +57,7 @@
       min="0"
       max="40"
       v-model="blurIntensity"
-      class="range max-w-64"
+      class="range w-48 max-w-full min-w-0"
     />
   </SettingItem>
 </template>
@@ -79,8 +74,8 @@ import {
   defaultTheme,
   theme,
 } from '@/store/settings'
-import { AdjustmentsHorizontalIcon, ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
-import { ref, watch } from 'vue'
+import { ArrowUpTrayIcon } from '@heroicons/vue/24/outline'
+import { ref } from 'vue'
 import { useI18n } from 'vue-i18n'
 import TextInput from '../../common/TextInput.vue'
 
@@ -90,14 +85,7 @@ const { t } = useI18n()
 
 const k = GENERAL_ITEM_KEYS
 
-const displayBgProperty = ref(false)
 const inputFileRef = ref<HTMLInputElement>()
-
-watch(customBackgroundURL, (value) => {
-  if (value) {
-    displayBgProperty.value = true
-  }
-})
 
 const handlerClickUpload = () => {
   inputFileRef.value?.click()

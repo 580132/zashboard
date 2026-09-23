@@ -43,7 +43,7 @@
         <div
           v-if="isOpen"
           ref="panelRef"
-          class="border-base-border bg-base-100 fixed z-[998] flex flex-col gap-1 overflow-hidden rounded-lg border p-1 shadow-lg backdrop-blur-sm!"
+          class="border-base-border bg-base-100 overlay-glass fixed z-[998] flex flex-col gap-1 overflow-hidden rounded-lg border p-1 shadow-lg backdrop-blur-sm"
           :style="panelStyle"
         >
           <div
@@ -108,7 +108,7 @@
         <div
           v-if="isOpen && isActionsOpen"
           ref="actionsPanelRef"
-          class="border-base-border bg-base-100 fixed z-[998] flex flex-col gap-1 overflow-y-auto rounded-lg border p-1 shadow-lg backdrop-blur-sm!"
+          class="border-base-border bg-base-100 overlay-glass fixed z-[998] flex flex-col gap-1 overflow-y-auto rounded-lg border p-1 shadow-lg backdrop-blur-sm"
           :style="actionsPanelStyle"
         >
           <button

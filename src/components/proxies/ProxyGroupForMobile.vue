@@ -14,7 +14,7 @@
     </Transition>
     <div
       class="base-container proxy-group-card absolute flex flex-col gap-2 overflow-hidden p-2 will-change-transform"
-      :class="modalMode && blurIntensity < 5 && 'backdrop-blur-sm!'"
+      :class="modalMode && 'overlay-glass'"
       :style="cardStyle"
       @contextmenu.prevent.stop="handlerLatencyTest"
       @transitionend="handlerTransitionEnd"
@@ -57,7 +57,7 @@ import { useRenderProxyList } from '@/composables/use-render-proxy-list'
 import { PROXIES_PARENT_CLASS } from '@/helper/utils'
 import { proxyGroupLatencyTest } from '@/assembly/proxies'
 import { proxyMap } from '@/assembly/proxies'
-import { blurIntensity, groupProxiesByProvider } from '@/store/settings'
+import { groupProxiesByProvider } from '@/store/settings'
 import { computed, nextTick, onUnmounted, ref } from 'vue'
 import ProxiesByProvider from './ProxiesByProvider.vue'
 import ProxiesContent from './ProxiesContent.vue'

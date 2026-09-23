@@ -10,6 +10,7 @@
         ref="backdropRef"
         class="modal"
         :class="{ 'modal-open': isPresenting }"
+        :style="backdropSwipeStyle"
         role="dialog"
         aria-modal="true"
         :aria-labelledby="title ? 'dialog-title' : undefined"
@@ -18,14 +19,13 @@
         <div
           class="modal-backdrop w-screen"
           aria-hidden="true"
-          :style="backdropSwipeStyle"
           @click="close"
         />
 
         <div
           ref="modalBoxRef"
           class="modal-box bg-base-100 relative flex flex-col overflow-hidden p-0 outline-none max-md:max-h-[85dvh] max-md:min-h-[40dvh]"
-          :class="[blurIntensity < 5 && 'backdrop-blur-sm!', boxClass]"
+          :class="boxClass"
           :style="boxSwipeStyle"
           tabindex="-1"
           @click.stop
@@ -71,7 +71,6 @@
 
 <script setup lang="ts">
 import { useDialogOpenState } from '@/composables/use-dialog-state'
-import { blurIntensity } from '@/store/settings'
 import { XMarkIcon } from '@heroicons/vue/24/outline'
 import { computed, ref, watch, type CSSProperties } from 'vue'
 
@@ -80,7 +79,7 @@ const DIRECTION_LOCK_DISTANCE = 10
 const VERTICAL_DOMINANCE_RATIO = 1.2
 const MIN_FLING_DISTANCE = 48
 const CLOSE_VELOCITY = 0.5
-const SWIPE_TRANSITION = 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1)'
+const SWIPE_TRANSITION = 'transform 0.35s cubic-bezier(0.32, 0.72, 0, 1), opacity 0.25s ease-out'
 const SETTLE_TIMEOUT = 450
 
 type SwipeState = 'idle' | 'pending' | 'dragging' | 'settling' | 'dismissing' | 'rejected'
@@ -135,8 +134,8 @@ const backdropSwipeStyle = computed<CSSProperties | undefined>(() => {
     return
 
   return {
-    opacity: 1 - swipeProgress.value,
-    transition: swipeAnimating.value ? 'opacity 0.25s ease-out' : 'none',
+    backgroundColor: `oklch(0% 0 0 / ${0.4 * (1 - swipeProgress.value)})`,
+    transition: swipeAnimating.value ? 'background-color 0.25s ease-out' : 'none',
   }
 })
 
@@ -321,21 +320,28 @@ function enter() {
 </script>
 
 <style scoped>
+.modal {
+  opacity: 1;
+}
+
 .modal-enter-active,
 .modal-leave-active {
-  transition: opacity 0.25s ease-out;
+  transition: background-color 0.25s ease-out;
 }
 .modal-enter-from,
 .modal-leave-to {
-  opacity: 0;
+  background-color: transparent;
 }
 
 .modal-enter-active .modal-box,
 .modal-leave-active .modal-box {
-  transition: transform 0.35s cubic-bezier(0.32, 0.72, 0, 1);
+  transition:
+    transform 0.35s cubic-bezier(0.32, 0.72, 0, 1),
+    opacity 0.25s ease-out;
 }
 .modal-enter-from .modal-box,
 .modal-leave-to .modal-box {
+  opacity: 0;
   transform: scale(0.95);
 }
 

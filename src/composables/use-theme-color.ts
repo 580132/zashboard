@@ -40,18 +40,13 @@ export const useThemeColor = (app: Ref<HTMLElement | undefined>) => {
     if (!app.value) return
 
     const themeColor = getComputedStyle(app.value).getPropertyValue('background-color').trim()
-    const metaThemeColor = document.querySelector('meta[name="theme-color"]')
-    if (!metaThemeColor) return
-
     const rgb = dimProgress > 0 ? toRgb(themeColor) : null
-    if (!rgb) {
-      metaThemeColor.setAttribute('content', themeColor)
-      return
-    }
-
     const scale = 1 - OVERLAY_DIM_ALPHA * dimProgress
     const dim = (channel: number) => Math.round(channel * scale)
-    metaThemeColor.setAttribute('content', `rgb(${dim(rgb.r)}, ${dim(rgb.g)}, ${dim(rgb.b)})`)
+    const color = rgb ? `rgb(${dim(rgb.r)}, ${dim(rgb.g)}, ${dim(rgb.b)})` : themeColor
+
+    document.documentElement.style.setProperty('--status-bar-tint', color)
+    document.querySelector('meta[name="theme-color"]')?.setAttribute('content', color)
   }
 
   const animateDim = (to: number) => {

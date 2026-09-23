@@ -10,10 +10,6 @@
   @apply flex cursor-pointer items-center rounded-md px-2 py-1.5 text-sm transition-colors outline-none;
 }
 
-[role='listbox'] {
-  @apply backdrop-blur-sm!;
-}
-
 .floating-menu-enter-active,
 .floating-menu-leave-active {
   transition:

@@ -16,6 +16,7 @@ import {
 } from '@/helper/indexeddb'
 import type { Connection } from '@/types'
 import ipaddr from 'ipaddr.js'
+import { getDomain } from 'tldts'
 import { shallowRef, watch } from 'vue'
 import { activeBackend } from './setup'
 
@@ -337,7 +338,7 @@ export const aggregateConnections = (
       if (ipaddr.IPv4.isValid(hostkey) || ipaddr.IPv6.isValid(hostkey)) {
         key = hostkey
       } else {
-        key = hostkey.split('.').slice(-2).join('.')
+        key = getDomain(hostkey, { allowPrivateDomains: true }) || hostkey
       }
     } else if (type === ConnectionHistoryType.Process) {
       key = getProcessFromConnection(connection)

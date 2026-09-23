@@ -68,7 +68,7 @@ useOverscrollLock()
 watch(
   theme,
   () => {
-    document.body.setAttribute('data-theme', theme.value)
+    document.documentElement.setAttribute('data-theme', theme.value)
     setThemeColor()
   },
   {
@@ -132,6 +132,10 @@ useKeyboard()
     ]"
     :style="[backgroundImage, { height: 'var(--app-height, 100dvh)' }]"
   >
+    <div
+      aria-hidden="true"
+      class="status-bar-tint"
+    />
     <RouterView />
     <BackendSwitchToast />
     <BackendConnectionError />
@@ -148,6 +152,25 @@ useKeyboard()
 </template>
 
 <style>
+.status-bar-tint {
+  display: none;
+}
+
+@supports (-webkit-touch-callout: none) {
+  .status-bar-tint {
+    position: fixed;
+    top: 0;
+    right: 0;
+    left: 0;
+    z-index: 2147483647;
+    display: block;
+    height: 12px;
+    background-color: var(--status-bar-tint, var(--color-base-100));
+    opacity: 0.12;
+    pointer-events: none;
+  }
+}
+
 .app-toast-region {
   position: fixed;
   top: calc(0.75rem + env(safe-area-inset-top, 0px));

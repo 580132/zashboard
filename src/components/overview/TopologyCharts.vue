@@ -134,6 +134,7 @@ const chartSurfaceStyle = computed<CSSProperties>(() => {
 
   const style: CSSProperties = {
     backdropFilter: 'var(--app-glass, none)',
+    WebkitBackdropFilter: 'var(--app-glass, none)',
     height: '100%',
     width: '100%',
   }

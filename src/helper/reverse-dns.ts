@@ -42,7 +42,7 @@ export function isResolvableIP(ip: string | undefined): boolean {
   const address = parseIP(ip)
   if (!address) return false
 
-  return !['unspecified', 'loopback', 'linkLocal'].includes(address.range())
+  return !['unspecified', 'loopback'].includes(address.range())
 }
 
 export function reverseName(ip: string): string | null {

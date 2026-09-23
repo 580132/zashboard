@@ -11,6 +11,8 @@ const sourceIPRegexList: { regex: RegExp; label: string }[] = []
 type CIDREntry = { cidr: [ipaddr.IPv4 | ipaddr.IPv6, number]; label: string }
 const sourceIPCIDRList: CIDREntry[] = []
 
+const stripZone = (ip: string) => ip.split('%')[0]!
+
 const preprocessSourceIPList = () => {
   ipLabelCache.clear()
   sourceIPMap.clear()
@@ -35,7 +37,7 @@ const preprocessSourceIPList = () => {
       } catch {}
     }
 
-    sourceIPMap.set(key, label)
+    sourceIPMap.set(stripZone(key), label)
   }
 }
 
@@ -63,19 +65,19 @@ const getManualIPLabel = (ip: string): string | null => {
     return ipLabelCache.get(ip)!
   }
 
-  const isValidIP = ipaddr.isValid(ip)
-  const addr = isValidIP ? ipaddr.parse(ip) : null
+  const bareIP = stripZone(ip)
+  const addr = ipaddr.isValid(bareIP) ? ipaddr.parse(bareIP) : null
 
   if (addr?.kind() === 'ipv6') {
     for (const [key, label] of sourceIPMap.entries()) {
-      if (ip.endsWith(key)) {
+      if (bareIP.endsWith(key)) {
         return cacheResult(ip, label)
       }
     }
   }
 
-  if (sourceIPMap.has(ip)) {
-    return cacheResult(ip, sourceIPMap.get(ip)!)
+  if (sourceIPMap.has(bareIP)) {
+    return cacheResult(ip, sourceIPMap.get(bareIP)!)
   }
 
   for (const { regex, label } of sourceIPRegexList) {
