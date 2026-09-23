@@ -23,8 +23,11 @@ export const useOverscrollLock = () => {
   let startY = 0
   let scrollableY: HTMLElement | null = null
   let lockedAxis: 'x' | 'y' | null = null
+  let ignored = false
 
   const onTouchStart = (event: TouchEvent) => {
+    ignored = (event.target as Element | null)?.closest?.('input[type="range"], .tab-bar') != null
+    if (ignored) return
     startX = event.touches[0].clientX
     startY = event.touches[0].clientY
     scrollableY = findScrollable(event.target, 'y')
@@ -32,7 +35,7 @@ export const useOverscrollLock = () => {
   }
 
   const onTouchMove = (event: TouchEvent) => {
-    if (event.touches.length > 1) return
+    if (ignored || event.touches.length > 1) return
 
     const deltaX = event.touches[0].clientX - startX
     const deltaY = event.touches[0].clientY - startY

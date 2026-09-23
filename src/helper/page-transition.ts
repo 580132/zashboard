@@ -4,7 +4,7 @@ import { isMiddleScreen } from '@/helper/utils'
 import { computed, ref } from 'vue'
 import type { RouteLocationNormalized } from 'vue-router'
 
-type SlideDirection = 'slide-left' | 'slide-right' | ''
+export type SlideDirection = 'slide-left' | 'slide-right' | ''
 
 export type SettingsPaneTransition = 'push' | 'pop' | ''
 
@@ -13,6 +13,12 @@ const navigationLevel = (route: RouteLocationNormalized) => {
 }
 
 const slideDirection = ref<SlideDirection>('')
+
+let pendingSwipeDirection: SlideDirection = ''
+
+export const setPendingSwipeDirection = (direction: SlideDirection) => {
+  pendingSwipeDirection = direction
+}
 
 export const settingsPaneTransition = ref<SettingsPaneTransition>('')
 
@@ -46,8 +52,11 @@ export const resolvePageTransition = (
   to: RouteLocationNormalized,
   from: RouteLocationNormalized,
 ) => {
+  const swipeDirection = pendingSwipeDirection
+  pendingSwipeDirection = ''
+
   if (to.name !== from.name) {
-    slideDirection.value = resolveSlideDirection(to, from)
+    slideDirection.value = swipeDirection || resolveSlideDirection(to, from)
     settingsPaneTransition.value = ''
     return
   }

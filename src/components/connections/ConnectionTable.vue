@@ -857,6 +857,7 @@ tbody tr:hover > .pinned-td {
 
 .custom-background .pinned-td {
   background-color: transparent !important;
+  -webkit-backdrop-filter: var(--app-glass, none);
   backdrop-filter: var(--app-glass, none);
 }
 </style>
