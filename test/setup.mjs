@@ -51,8 +51,37 @@ const answerVersion = async (mode, req, res, headers = {}) => {
 
 const state = { origin: 'offline', local: 'offline', originProbes: 0, localProbes: 0 }
 
+// Small gRPC-Web fixture for the fork's sing-box login path, not a daemon implementation.
+const grpcFrame = (payload, flag = 0) => {
+  const header = Buffer.alloc(5)
+  header[0] = flag
+  header.writeUInt32BE(payload.length, 1)
+  return Buffer.concat([header, payload])
+}
+
+const answerSingbox = (req, res, path) => {
+  const isVersion = path === '/daemon.StartedService/GetVersion'
+  if (isVersion) state.singboxProbes++
+  if (isVersion && state.singbox === 'offline') return res.socket.destroy()
+
+  const unauthorized =
+    isVersion &&
+    (state.singbox === 'unauthorized' ||
+      (state.singbox === 'secret' && req.headers.authorization !== `Bearer ${SECRET}`))
+  const version = Buffer.from('sing-box 1.12.0')
+  // daemon.Version: version (field 1), apiVersion (field 2).
+  const payload = isVersion
+    ? Buffer.concat([Buffer.from([0x0a, version.length]), version, Buffer.from([0x10, 4])])
+    : Buffer.alloc(0)
+  const trailers = grpcFrame(Buffer.from(`grpc-status: ${unauthorized ? 16 : 0}\r\n`), 0x80)
+
+  res.writeHead(200, { 'content-type': 'application/grpc-web+proto' })
+  res.end(unauthorized ? trailers : Buffer.concat([grpcFrame(payload), trailers]))
+}
+
 const originServer = createServer(async (req, res) => {
   const path = new URL(req.url, 'http://localhost').pathname
+  if (path.startsWith('/daemon.StartedService/')) return answerSingbox(req, res, path)
   if (path === '/version') {
     state.originProbes++
     return answerVersion(state.origin, req, res)
@@ -112,6 +141,7 @@ const run = async (
   {
     origin: originMode = 'offline',
     local = 'offline',
+    singbox = 'offline',
     query = '',
     initial = [],
     active = initial[0]?.uuid || '',
@@ -121,7 +151,14 @@ const run = async (
     probes,
   },
 ) => {
-  Object.assign(state, { origin: originMode, local, originProbes: 0, localProbes: 0 })
+  Object.assign(state, {
+    origin: originMode,
+    local,
+    singbox,
+    originProbes: 0,
+    localProbes: 0,
+    singboxProbes: 0,
+  })
   const page = await browser.newPage()
   try {
     await page.call('Page.addScriptToEvaluateOnNewDocument', {
@@ -176,7 +213,11 @@ const run = async (
     }
 
     if (probes) {
-      const probed = { origin: state.originProbes > 0, local: state.localProbes > 0 }
+      const probed = {
+        origin: state.originProbes > 0,
+        local: state.localProbes > 0,
+        singbox: state.singboxProbes > 0,
+      }
       assert.deepEqual(
         Object.fromEntries(Object.keys(probes).map((key) => [key, probed[key]])),
         probes,
@@ -352,6 +393,32 @@ try {
     local: 'online',
     edit: true,
     form: { host: 'edited.example', port: originPort },
+  })
+
+  console.log('sing-box gRPC-Web setup')
+  await run('sing-box URL logs in without a Clash version probe', {
+    singbox: 'online',
+    query: `?${explicit(originPort, '&type=singbox')}`,
+    login: { type: 'singbox', host: '127.0.0.1', port: originPort },
+    probes: { origin: false, singbox: true },
+  })
+  await run('sing-box hash type and search token survive the setup redirect', {
+    singbox: 'secret',
+    query: `?secret=${SECRET}#/proxies?${explicit(originPort, '&type=singbox')}`,
+    login: { type: 'singbox', port: originPort, password: SECRET },
+    probes: { origin: false, singbox: true },
+  })
+  await run('same-origin sing-box uses gRPC-Web and the supplied token', {
+    singbox: 'secret',
+    query: `?type=singbox&secret=${SECRET}`,
+    login: { type: 'singbox', host: '127.0.0.1', port: originPort, password: SECRET },
+    probes: { origin: false, singbox: true },
+  })
+  await run('unauthorized same-origin sing-box stays on setup and preserves the token', {
+    singbox: 'secret',
+    query: '?type=singbox&secret=wrong',
+    form: { host: '127.0.0.1', port: originPort, password: 'wrong' },
+    probes: { origin: false, singbox: true },
   })
 } finally {
   browser.close()
