@@ -97,11 +97,11 @@ router.beforeEach((to, from) => {
   resolvePageTransition(to, from)
 
   if (!activeBackend.value && to.name !== ROUTE_NAME.setup) {
-    router.push({ name: ROUTE_NAME.setup })
+    router.push({ name: ROUTE_NAME.setup, query: to.query })
     return
   }
 
-  // Block navigation to a page the active backend's channels can't serve.
+  // Block navigation to a page the active backend's driver can't serve.
   const requiredCap = typeof to.name === 'string' ? ROUTE_CAPABILITY[to.name] : undefined
   if (requiredCap && !can(requiredCap)) {
     router.push({ name: ROUTE_NAME.proxies })

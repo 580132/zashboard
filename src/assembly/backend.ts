@@ -82,10 +82,13 @@ export type Cap =
   | 'flows'
   | 'dnsCache'
   | 'dnsLog'
+  | 'dnsRules'
   | 'routingTrace'
   | 'datapath'
   | 'runtimeSettings'
+  | 'geodataSettings'
   | 'configSources'
+  | 'configCreate'
   | 'configEdit'
   | 'entryManage'
   | 'groupConfigPatch'
@@ -185,35 +188,42 @@ const singboxCaps = computed<Caps>(() => {
 
 const daeCaps = computed<Caps>(() => {
   const resources = daeCapabilities.value?.resources
+  const settingFields = resources?.runtime_settings?.fields ?? []
 
   return {
-    reloadConfigs: resources?.reload.available === true,
-    updateGeoDatabase: resources?.geodata.can_update === true,
+    reloadConfigs: resources?.reload?.available === true,
+    updateGeoDatabase: resources?.geodata?.can_update === true,
 
-    traceLogLevel: resources?.logs.levels?.includes('trace') === true,
+    traceLogLevel: resources?.logs?.levels?.includes('trace') === true,
 
-    runtimeStats: resources?.runtime_outbounds.available === true,
+    runtimeStats: resources?.runtime_outbounds?.available === true,
 
-    latencyTest: resources?.probes.available === true,
-    proxyProviderUpdate: resources?.providers.can_refresh === true,
-    flushDNSCache: resources?.dns_cache.flush === true,
-    dnsQuery: resources?.dns_query.available === true,
-    connectionsClose: resources?.connections.can_close === true,
-    connectionsFilterClose: resources?.connections.can_close === true,
+    latencyTest: resources?.probes?.available === true,
+    proxyProviderUpdate: resources?.providers?.can_refresh === true,
+    flushDNSCache: resources?.dns_cache?.flush === true,
+    dnsQuery: resources?.dns_query?.available === true,
+    connectionsClose: resources?.connections?.can_close === true,
+    connectionsFilterClose: resources?.connections?.can_close === true,
     metricsHistory:
-      resources?.traffic_history.available === true || resources?.memory_history.available === true,
-    backendEvents: resources?.events.available === true,
-    flows: resources?.flows.available === true,
-    dnsCache: resources?.dns_cache.read === true,
-    dnsLog: resources?.dns_log.available === true,
-    routingTrace: resources?.routing_trace.available === true,
-    datapath: resources?.datapath.available === true,
-    runtimeSettings: resources?.runtime_settings.available === true,
-    configSources: resources?.config.available === true,
-    configEdit: resources?.config.writable === true && resources?.config.content === true,
-    entryManage: resources?.nodes.can_manage === true || resources?.providers.can_manage === true,
-    groupConfigPatch: resources?.groups.config_patch === true,
-    lifecycleControl: resources?.suspend.available === true && resources?.resume.available === true,
+      resources?.traffic_history?.available === true ||
+      resources?.memory_history?.available === true,
+    backendEvents: resources?.events?.available === true,
+    flows: resources?.flows?.available === true,
+    dnsCache: resources?.dns_cache?.read === true,
+    dnsLog: resources?.dns_log?.available === true,
+    dnsRules: resources?.dns_rules?.available === true,
+    routingTrace: resources?.routing_trace?.available === true,
+    datapath: resources?.datapath?.available === true,
+    runtimeSettings: resources?.runtime_settings?.available === true,
+    geodataSettings:
+      resources?.geodata?.configurable_sources === true && settingFields.includes('geodata'),
+    configSources: resources?.config?.available === true,
+    configEdit: resources?.config?.writable === true,
+    configCreate: resources?.config?.writable === true && resources?.config?.create === true,
+    entryManage: resources?.nodes?.can_manage === true || resources?.providers?.can_manage === true,
+    groupConfigPatch: resources?.groups?.config_patch === true,
+    lifecycleControl:
+      resources?.suspend?.available === true && resources?.resume?.available === true,
 
     // dae 有 rules 页与后端动作入口(规则页路由与动作列表按这两个 fork 能力门控)。
     rules: true,
